@@ -1,24 +1,26 @@
 import socket
+import threading
+import time
+import pickle
+y=[0,12,6,8,3,2,10]
+data=pickle.dumps(y)
+host = '127.0.0.1'
+print(data)
 
 
-def Main():
-    host = 'localhost'  # client ip
-    port = 4005
+serverPort = 1
 
-    server = (host, 4000)
+# Connecting to server
+connectServer = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+connectServer.connect((host, serverPort))
 
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.bind((host, port))
+# Connecting to worker
+workerPort = 11
+connectWorker = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+connectWorker.connect((host,workerPort))
 
-    message = input("-> ")
-    while message != 'q':
-        s.sendto(message.encode('utf-8'), server)
-        data, addr = s.recvfrom(1024)
-        data = data.decode('utf-8')
-        print("Received from server: " + data)
-        message = input("-> ")
-    s.close()
+connectWorker.send(data)
 
-
-if __name__ == '__main__':
-    Main()
+# def sendDataToWorker():
+#     while True:
+#         try:

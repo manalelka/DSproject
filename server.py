@@ -1,24 +1,49 @@
 import socket
+import threading
+import time
 
+host = 'localhost'
+port = 1
 
-def Main():
-    host = 'localhost'  # Server ip
-    port = 4000
+server = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+server.bind((host,port))
+server.listen()
 
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.bind((host, port))
+workers = []
+client = ''
 
-    print("Server Started")
+def pingWorker():
+    while(True):
+        time.sleep(5)
+        for worker in workers:
+            worker.send('Are you ready?'.encode('ascii'))
+
+def handleWorker (worker):
     while True:
-        data, addr = s.recvfrom(1024)
-        data = data.decode('utf-8')
-        print("Message from: " + str(addr))
-        print("From connected user: " + data)
-        data = data.upper()
-        print("Sending: " + data)
-        s.sendto(data.encode('utf-8'), addr)
-    c.close()
+        try:
+            ready = worker.recv(1024).decode('ascii')
+            if ready == 'Yes':
+                print(ready)
+                print('Worker is ready')
+            else:
+                print(ready)
+                print('Worker is not ready')
+        except:
+            index = workers.index(worker)
+            workers.remove(worker)
+            worker.close()
+            print('A worker',worker,'has left')
+            break
 
+def go():
+    while True:
+        worker,address = server.accept()
+        print(f'Connected with {str(address)}')
+        workers.append(worker)
+        thread = threading.Thread(target=handleWorker, args=(worker,)) # If it is ready, do something ... (currently only print it is ready)
+        thread.start()
+        thread2 = threading.Thread(target=pingWorker) # Ping every 5 seconds to check readiness
+        thread2.start()
 
-if __name__ == '__main__':
-    Main()
+print('Server is starting')
+go()
