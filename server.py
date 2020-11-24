@@ -12,52 +12,60 @@ jobs = {} #dictionary with client: workers, workers processing the client petiti
 def moveToNotAvailable(address):
     #Check if it was already between the available workers, delete itif so, and
     # append it to not ready ones
-    try:
-        i = availableWorkers.index(address)
-        del availableWorkersWorkes[i]
-    except:
-        pass
-    notReadyWorkers.append(address)
+	if address not in notReadyWorkers:
+		try:
+			i = availableWorkers.index(address)
+			del availableWorkers[i]
+		except:
+			pass
+		notReadyWorkers.append(address)
 
 def moveToAvailable(address):
     #Check if it was already between not ready workers, delete it if so, and
     # append it to available ones
-    try:
-        i = notReadyWorkers.index(address)
-        del notReadyWorkes[i]
-    except:
-        pass
-    availableWorkers.append(address)
+	if address not in availableWorkers:
+		try:
+			i = notReadyWorkers.index(address)
+			del notReadyWorkers[i]
+		except:
+			pass
+		availableWorkers.append(address)
 
 def listenWorkers():
     #Create socket to listen to workers
     workersSocket = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-    workersSocket.bind((HOST,PORT_WORKERS))
+    workersSocket.bind((HOST,SERVER_PORT_WORKERS))
     workersSocket.listen()
 
     while True:
         #Accept worker connection and process its message
         worker,address = workersSocket.accept()
-        #Save the timestamp of the communication to later check dead workers
-        tsWorkers[address] = time.time()
+
         #Depending on the message save the worker in the corresponding list
         try:
-            worker.recv(1024).decode('ascii')
-            if ready == 'Yes':
-                moveToAvailable(address)
-                print("Worker at: " +str(address) +  ' is ready')
-            elif ready == 'No':
-                moveToNotAvailable(address)
-                print("Worker at: " +str(address) +  ' is not ready')
+			#TODO check msg well sent (correct format)
+            msg = worker.recv(1024).decode('ascii')
+            if msg[:3] == 'Yes':
+                moveToAvailable((address[0], int(msg[4:])))
+                print("Worker at: " + str(address) + msg[4:] + ' is ready')
+            elif msg[:2] == 'No':
+                moveToNotAvailable((address[0], int(msg[4:])))
+                print("Worker at: " + str(address) + msg[4:] + ' is not ready')
+
+            #Save the timestamp of the communication to later check dead workers
+            tsWorkers[(address[0], int(msg[4:]))] = time.time()
             #We just received one more worker, so maybe a client can use it.
             sendWorkers()
+            print(tsWorkers)
+            print(availableWorkers)
         except:
+			#TODO not exactly this but i think even the port is wrong it should then work
             moveToNotAvailable(address)
-        finally:
+        	#finally:
             worker.close()
 
 def sendWorkers():
-    #Send a client the workers it can use
+    #Send to the client the workers it can use
     noMoreWorkers = False #flag for when we give all the workers
 
     for i in workersLeftToSend.copy():
@@ -89,7 +97,7 @@ def sendWorkers():
 def listenClients():
     #We wait for a connection with a client
     clientSocket = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-    clientSocket.bind((HOST,PORT_CLIENTS))
+    clientSocket.bind((HOST,SERVER_PORT_CLIENTS))
     clientSocket.listen()
 
     while True:
@@ -97,7 +105,7 @@ def listenClients():
         try:
             #We receive from the client how many workers it wants
             data = client.recv(1024)
-            wantedNodes = data[9] #ask for 3 ? TODO
+            wantedNodes = data[9] #ask for 3 ? TODO decide msg
 
             #We decide how many workers we give the client
             l = len(availableWorkers)
@@ -150,7 +158,8 @@ def checkWorkers():
     #Check ts of workers and, in case it's too large, declare the worker not available
     while True:
         for addr, ts in tsWorkers.items():
-            if time.time() > MAX_TSDIFF:
+            if (time.time() - ts) > MAX_TSDIFF:
+                #TODO not doing it ??
                 moveToNotAvailable(addr)
         time.sleep(CHECK_WORKERS_SLEEP)
 

@@ -2,31 +2,34 @@ import threading
 import socket
 import time
 import pickle
-
+from include import *
 
 host = '127.0.0.1'
-serverPort = 1
+serverPort = SERVER_PORT_WORKERS
 
-# Connecting to server port
-connectServer = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-connectServer.connect((host, serverPort))
 
 # Creating a worker port to listen to client and possibly with each other?
-workerPort = 11
+workerPort = 1111
 workerServer = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
 workerServer.bind((host,workerPort))
 workerServer.listen()
 
 isReady = True
 
-def handlePingFromServer():
+def pingServer():
     while True:
         try:
-            message = connectServer.recv(1024).decode('ascii')
-            if message == 'Are you ready?' and isReady:
-                connectServer.send('Yes'.encode('ascii'))
+            # Connecting to server port
+            connectServer = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            connectServer.connect((host, serverPort))
+            if isReady:
+                msg = 'Yes ' + str(workerPort)
+                connectServer.send(msg.encode('ascii'))
             else:
-                connectServer.send('No'.encode('ascii'))
+                msg = 'No ' + str(workerPort)
+                connectServer.send(msg.encode('ascii'))
+            connectServer.close()
+            time.sleep(PING_SLEEP)
         except:
             print("An error occurred!")
             connectServer.close()
@@ -53,7 +56,7 @@ def processData(data):
     return data
 
 
-handlePingThread = threading.Thread(target = handlePingFromServer)
-handlePingThread.start()
+pingThread = threading.Thread(target = pingServer)
+pingThread.start()
 handleDataThread = threading.Thread(target = handleDataFromClient)
 handleDataThread.start()
