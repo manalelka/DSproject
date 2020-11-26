@@ -19,16 +19,21 @@ def startConnectionToServer():
                 connectServer.connect((host, serverPort))
 
                 #Send how many nodes the client needs to the server
-                msg = 'Send 3 nodes'  #TODO : agree on one message ( always ask for 3 nodes ? )
+                msg = 'Send 3'  #TODO : agree on one message ( always ask for 3 nodes ? )
                 connectServer.send(msg.encode('ascii'))
 
+                #We wait for tthe server to tell us how many workers it gives
+                #us and split the data accordingly
+                nbNodes = connectServer.recv(1024)
+                datasets=splitDataset(nbNodes) #list of split datasets
+
+                #TODO while until finished
                 #Get list of working nodes (ip,port)
                 data = connectServer.recv(1024)
                 ips , ports = pickle.loads(data) #list of @ ips and ports of working nodes sent by the server
                                                 #TODO : agree on one format to send the ips and ports and test it --> we should use pickle on server side too
                 nbNodes=len(ips) #number of working nodes
 
-                datasets=splitDataset(nbNodes) #list of split datasets
 
                 for i in range(nbNodes):
                     datasetToSend = datasets[i]
@@ -36,7 +41,7 @@ def startConnectionToServer():
                     workerPort = ports[i]
                     listenWorker(datasetToSend,workerIp,workerPort)
 
-                #TODO : (more like a problem !!) if the server sends a new available worker node we would have already split the dataset and sent it 
+                #TODO : (more like a problem !!) if the server sends a new available worker node we would have already split the dataset and sent it
                 # to the available nodes...
 
                 #We don't close the connection to the server in case the server sends a new working node

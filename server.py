@@ -1,6 +1,7 @@
 import socket
 import threading
 import time
+import pickle
 from include import *
 
 availableWorkers = [] #list of addresses of the available workers
@@ -43,7 +44,7 @@ def listenWorkers():
 
         #Depending on the message save the worker in the corresponding list
         try:
-			#TODO check msg well sent (correct format)
+            #TODO check msg (correct format)
             msg = worker.recv(1024).decode('ascii')
             if msg[:3] == 'Yes':
                 moveToAvailable((address[0], int(msg[4:])))
@@ -59,9 +60,9 @@ def listenWorkers():
             print(tsWorkers)
             print(availableWorkers)
         except:
-			#TODO not exactly this but i think even the port is wrong it should then work
+            #TODO not exactly this but i think even the port is wrong it should then work
             moveToNotAvailable(address)
-        	#finally:
+        finally:
             worker.close()
 
 def sendWorkers():
@@ -87,7 +88,9 @@ def sendWorkers():
 
         for addr in workersToSend:
             moveToNotAvailable(addr)
-        client.send([NEW_WORKERS,workersToSend])
+        
+        msg =  pickle.dumps([NEW_WORKERS,workersToSend])
+        client.send(msg)
 
         jobs[client] += workersToSend
 
@@ -105,12 +108,12 @@ def listenClients():
         try:
             #We receive from the client how many workers it wants
             data = client.recv(1024)
-            wantedNodes = data[9] #ask for 3 ? TODO decide msg
+            wantedNodes = data[5] #send 3 ? TODO decide msg
 
-            #We decide how many workers we give the client
-            l = len(availableWorkers)
-            numberWorkers = min(wantedWorkers, MAX_WORKERS)
+            #We decide how many workers we give the client and tell the client
+            numberWorkers = min(int(wantedNodes), MAX_WORKERS)
             workersLeftToSend.append([client,numberWorkers])
+            client.send(nbrNodes.encode(ascii))
 
             #We check if there are free workers for the client
             sendWorkers()
@@ -138,8 +141,8 @@ def checkJobs():
             lenDeathWorkers = len(deadWorkers)
             #If there are dead workers we search for new workers to substitute the dead
             if lenDeathWorkers > 0:
-                newWorkers = searchWorkers(lenDeathWorkers)
-                client.send([DEAD_WORKERS,deadWorkers])
+                msg =  pickle.dumps([DEAD_WORKERS,deadWorkers])
+                client.send(msg)
                 clientWorkers = list(set(clientWorkers) - set(deadWorkers))
                 jobs[client] = clientWorkers
 
@@ -159,7 +162,6 @@ def checkWorkers():
     while True:
         for addr, ts in tsWorkers.items():
             if (time.time() - ts) > MAX_TSDIFF:
-                #TODO not doing it ??
                 moveToNotAvailable(addr)
         time.sleep(CHECK_WORKERS_SLEEP)
 
