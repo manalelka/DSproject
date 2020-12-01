@@ -24,69 +24,76 @@ def startConnectionToServer():
             connectServer.send(msg.encode('ascii'))
             print('Asked for ' + str(nbNodes) + ' nodes')
 
-            #We wait for tthe server to tell us how many workers it gives
-            #us and split the data accordingly
+            #We wait for the server to tell us how many workers it gives us and split the data accordingly
             nbNodes = connectServer.recv(1024)
             print('Permission for ' + str(int(nbNodes)) + ' nodes')
             datasets=splitDataset(int(nbNodes)) #list of split datasets
-
-
+           
             #TODO while until finished check
             finished = False
             while not finished:
-                #Get list of working nodes (ip,port)
-                data = []
-                while len(data) <= 0:
-                    data = connectServer.recv(1024) #TODO why is it receiveng??
 
-                flag, addrs = pickle.loads(data) #addrs of @ ips and ports of working nodes sent by the server
+                #### First part : get list of IP @and ports of nodes and send the splitted data accordingly to the working nodes
+                wrkNodescounter = 0 #working nodes counter
+                while(wrkNodescounter <nbNodes and wrkNodescounter<=MAX_WORKERS): #while we don't have the number of nodes we asked for
+                    data = []
+                    while len(data) <= 0: #Why this while ?!
+                        data = connectServer.recv(1024) #TODO why is it receiveng??        
+                    flag, addrs = pickle.loads(data) #@ ips and ports of working nodes sent by the server
 
-                if flag == NEW_WORKERS: #TODO send those parts of the data
-                    dum = 0
-                elif flag == DEAD_WORKERS: #TODO see which data was sent to them and resend when one is available
-                    dum = 0
-                print(addrs)
+                    if flag == NEW_WORKERS: #We send data to these new workers
+                        wrkNodescounter+=1
+                        workerIp=addrs[0][0]
+                        workerPort=addrs[0][1]
+                        sendDataToWorker(datasets[wrkNodescounter],workerIp,workerPort)
 
-                '''
-                nbNodes=len(ips) #number of working nodes
-
-
-                for i in range(nbNodes):
-                    datasetToSend = datasets[i]
-                    workerIp= ips[i]
-                    workerPort = ports[i]
-                    listenWorker(datasetToSend,workerIp,workerPort)
-
-            #TODO : (more like a problem !!) if the server sends a new available worker node we would have already split the dataset and sent it
-            # to the available nodes...
+                    elif flag == DEAD_WORKERS: #These workers are dead
+                        #we decrease the number of the "good" nodes that way we know that the server is going to send another worker
+                        if(wrkNodescounter!=0):
+                            wrkNodescounter-=1 
+                        workerIp=addrs[0][0]
+                        workerPort=addrs[0][1]
+                        #We check which data was sent to this dead node
+                        try:
+                            workerSocket =socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                            workerSocket.connect((workerIp,workerPort))
+                            msg= 'Which data was sent to this node ?' #TODO : agree on message
+                            data = pickle.loads(workerSocket.recv(1024))
+                            #TODO : what to do with this part of the data ?
+                        except:
+                            print("An error occurred!")
+                            workerSocket.close()
+                
+                #### Second part : get the computation result and see if check that it's correct
+                #TODO : get the result of the computation from the workers and mark finished as correct
 
             #We don't close the connection to the server in case the server sends a new working node
-            '''
-
+    
         except:
             print("An error occurred!")
             connectServer.close()
 
-def listenWorker(df,workerIp,workerPort):
-        while True:
-            try:
-                #Connect to the worker node
-                workerSocket =socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                workerSocket.connect((workerIp,workerPort))
+def sendDataToWorker(df,workerIp,workerPort):
+        try:
+            #Connect to the worker node
+            workerSocket =socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            workerSocket.connect((workerIp,workerPort))
+            #Serialize the dataset with pickle
+            df_pickled= pickle.dumps(df)
+                
 
-                #Serialize the dataset with pickle
-                df_pickled= pickle.dumps(df)
+            #send the serialized dataset with pickle
+            workerSocket.send(df_pickled)
 
-                #send the serialized dataset with pickle
-                workerSocket.send(df_pickled)
+            #close the connection with the worker
+            workerSocket.close()
 
-                #close the connection with the worker
-                workerSocket.close()
+        except:
+            print("An error occurred!")
+            workerSocket.close()
 
-            except:
-                print("An error occurred!")
-                workerSocket.close()
-                break
+
+            
 
 def splitDataset(nbNodes):
     # split the dataset depending on how many working nodes we have
