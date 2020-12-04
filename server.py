@@ -6,12 +6,12 @@ from include import *
 
 availableWorkers = [] #list of addresses of the available workers
 notReadyWorkers = [] #list of addresses of the not available workers
-workersLeftToSend = [] #list of tuples [client, numberWorkers], numberWorkers is the number of workers the client still needs
+workersLeftToSend = [] #list of tuples [client, nLEumberWorkers], numberWorkers is the number of workers the client still needs
 tsWorkers = {} #dictionary with workerAddress: ts, ts the timestamp of the last interaction we had with the worker
 jobs = {} #dictionary with client: workers, workers processing the client petition at the moment
 
 def moveToNotAvailable(address):
-	#Check if it was already between the available workers, delete itif so, and
+	#Check if it was already between the available workers, delete it if so, and
 	# append it to not ready ones
 	if address not in notReadyWorkers:
 		try:
@@ -41,20 +41,22 @@ def listenWorkers():
 	while True:
 		#Accept worker connection and process its message
 		worker,address = workersSocket.accept()
-
 		#Depending on the message save the worker in the corresponding list
 		try:
 			#TODO check msg (correct format)
-			msg = worker.recv(1024).decode('ascii')
-			if msg[:3] == 'Yes':
-				moveToAvailable((address[0], int(msg[4:])))
-				print("Worker at: " + str(address) + ' port: '+ msg[4:] + ' is ready')
-			elif msg[:2] == 'No':
-				moveToNotAvailable((address[0], int(msg[4:])))
-				print("Worker at: " + str(address) + ' port: ' + msg[4:] + ' is not ready')
+			msg = worker.recv(1024)
+			msg = pickle.loads(msg)
+			if msg[0] == 'PING':
+				pass
+			elif msg[0] == 'Yes':
+				moveToAvailable((address[0], int(msg[1])))
+				print("Worker at: " + str(address) + ' port: '+ msg[1] + ' is ready')
+			elif msg[0] == 'No':
+				moveToNotAvailable((address[0], int(msg[1])))
+				print("Worker at: " + str(address) + ' port: ' + msg[1] + ' is not ready')
 
 			#Save the timestamp of the communication to later check dead workers
-			tsWorkers[(address[0], int(msg[4:]))] = time.time()
+			tsWorkers[(address[0], int(msg[1]))] = time.time()
 			#We just received one more worker, so maybe a client can use it.
 			sendWorkers()
 		except:
@@ -67,20 +69,20 @@ def sendWorkers():
 	#Send to the client the workers it can use
 	noMoreWorkers = False #flag for when we give all the workers
 
-	for i in workersLeftToSend.copy():
-		client = i[0]
-		wantedWorkers = i[1]
+	for job in workersLeftToSend.copy():
+		client = job[0]
+		wantedWorkers = job[1]
 		l = len(availableWorkers)
 
-		if l>0:
+		if l > 0:
 			#If we have more than the needed workers we assign those to the client and continue
-			if l > wantedWorkers:
+			if l >= wantedWorkers:
 				workersToSend = availableWorkers[:wantedWorkers]
-				workersLeftToSend.remove(i)
+				workersLeftToSend.remove(job)
 			#else we send the workers we have and update the needed workers by the client
 			else:
 				workersToSend = availableWorkers[:l]
-				ind = workersLeftToSend.index(i)
+				ind = workersLeftToSend.index(job)
 				workersLeftToSend[ind][1] = wantedWorkers - l
 				#We don't have more clients to send so we want to end the cycle
 				noMoreWorkers = True
@@ -93,7 +95,7 @@ def sendWorkers():
 				client.send(msg)
 				jobs[client] += workersToSend
 		else:
-			noMoreWorkers=True
+			noMoreWorkers = True
 
 		if(noMoreWorkers):
 			break
@@ -182,6 +184,8 @@ def startServer():
 
 	threadCheckWorkers = threading.Thread(target=checkWorkers) #check if workers are dead
 	threadCheckWorkers.start()
+
+	print("Server started")
 
 print('Server is starting')
 startServer()
