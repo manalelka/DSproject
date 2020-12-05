@@ -2,6 +2,8 @@ import socket
 import threading
 import time
 import pickle
+import signal
+import sys
 from include import *
 
 availableWorkers = [] #list of addresses of the available workers
@@ -9,6 +11,10 @@ notReadyWorkers = [] #list of addresses of the not available workers
 workersLeftToSend = [] #list of tuples [client, nLEumberWorkers], numberWorkers is the number of workers the client still needs
 tsWorkers = {} #dictionary with workerAddress: ts, ts the timestamp of the last interaction we had with the worker
 jobs = {} #dictionary with client: workers, workers processing the client petition at the moment
+
+def signalHandler(sig, frame):
+    print('Closing the server...')
+    sys.exit(0)
 
 def moveToNotAvailable(address):
 	#Check if it was already between the available workers, delete it if so, and
@@ -178,6 +184,9 @@ def checkWorkers():
 		time.sleep(CHECK_WORKERS_SLEEP)
 
 def startServer():
+
+	#We capture SIGINT to end gracefully
+	signal.signal(signal.SIGINT, signalHandler)
 
 	threadHandleClients = threading.Thread(target=listenClients) #listen from connections from clients
 	threadHandleClients.start()

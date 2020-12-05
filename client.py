@@ -13,14 +13,17 @@ host = '127.0.0.1'
 serverPort = SERVER_PORT_CLIENTS
 clientPort = CLIENT_PORT
 workersJob = {}
-result = None
-connectServer = None
-receive = 0
+jobsToGetDone = None
 
 def startConnectionToServer():
         #Connecting to server port
+        global connectServer
+        global result
         connectServer = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         connectServer.connect((host, serverPort))
+
+        #We initialize the result to None
+        result = None
 
         nbNodes = 3
         #Send how many nodes the client needs to the server
@@ -29,10 +32,14 @@ def startConnectionToServer():
         print('Asked for ' + str(nbNodes) + ' nodes')
 
         #We wait for the server to tell us how many workers it gives us and split the data accordingly
-        nbNodes = connectServer.recv(1024)
-        nbNodes = pickle.loads(nbNodes)
+        nbNodesPickle = connectServer.recv(1024)
+        nbNodes = pickle.loads(nbNodesPickle)
         print('Permission for ' + str(int(nbNodes)) + ' nodes')
         datasets = splitDataset(int(nbNodes)) #list of split datasets
+
+        #We iniciate the thread listening for results.
+        listenThread = threading.Thread(target = listenResult, args=(nbNodes,))
+        listenThread.start()
 
 
         #List of numbers of jobs left to be done in inverse order to pop them in order
@@ -42,11 +49,14 @@ def startConnectionToServer():
         while(result == None): #while we don't have the number of nodes we asked for
             data = []
             print(jobsToGetDone)
-            data = connectServer.recv(1024) 
 
-            print(data)
+            try:
+                data = connectServer.recv(1024) 
+            except:
+                #This is in case the socket is closed
+                pass
 
-            if(len(data) != 0):
+            if(result == None and len(data) != 0):
 
                 flag, addrs = pickle.loads(data) #@ ips and ports of working nodes sent by the server
                 print(jobsToGetDone)
@@ -63,7 +73,7 @@ def startConnectionToServer():
                         sendDataToWorker(datasets[jobNumber],workerIp,workerPort)
 
                         #We add to workersJob what job is this worker going to do
-                        workersJob[addrs[i]] = jobNumber
+                        workersJob[(workerIp,workerPort)] = jobNumber
 
                 elif flag == DEAD_WORKERS: #These workers are dead
                     #we decrease the number of the "good" nodes that way we know that the server is going to send another worker
@@ -72,7 +82,7 @@ def startConnectionToServer():
                         workerPort = addrs[i][1]
 
                         #Recover what data needs to be computed again because its worker die
-                        jobNumber = workersJob[addrs[i]] 
+                        jobNumber = workersJob[(workerIp,workerPort)] 
                         jobsToGetDone.append(jobNumber)
 
                 #### Second part : get the computation result and see if check that it's correct
@@ -110,35 +120,37 @@ def splitDataset(nbNodes):
     return splitDf
 
 ### TODO Listening to the result from worker
-def listenResult():
+def listenResult(nbNodes):
+    global connectServer
+    global result
+    partialResult = 0
+    numberResultsReceived = 0
     clientSocket = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
     clientSocket.bind((host,clientPort))
     clientSocket.listen()
-    print('Hello')
     while True:
         workerSocket,address = clientSocket.accept()
-        try:
-            data = workerSocket.recv(1024)
-            data = pickle.loads(data)
-            ### TODO accepting the intermediate result
-            receive += data
-            print(receive)
-            print("I receive something")
-            #We close both sockets letting connectServer socket to get out of the recv blocking call
+        #try:
+        data = workerSocket.recv(1024)
+        workerPort,data = pickle.loads(data)
+        ### TODO accepting the intermediate result
+        partialResult += data
+        print("I received the result (" + str(data) + ") from data partition: " + str(workersJob[(address[0],workerPort)]))
+        numberResultsReceived += 1
+        if(numberResultsReceived == nbNodes):
+            result = partialResult/nbNodes
+
+            #We close both sockets letting connectServer socket to get out of the recv blocking call when all data is processed
             clientSocket.close()
+            connectServer.shutdown(socket.SHUT_RDWR)
             connectServer.close()
-            
-        except:
-            print('Error receiving result')
-            clientSocket.close()
+            print("The result of the mean asked is: " + str(result))
             break
+            
+        #except:
+         #   print('Error receiving result')
+          #  clientSocket.close()
+           # break
 
-def main():
-    print("Starting the client connection ...")
-    listenThread = threading.Thread(target = listenResult)
-    listenThread.start()
-    startConnectionToServer()
-
-
-if __name__ == '__main__':
-    main()
+print("Starting the client connection ...")
+startConnectionToServer()
