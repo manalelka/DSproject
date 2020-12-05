@@ -7,7 +7,6 @@ from include import *
 
 host = '127.0.0.1'
 serverPort = SERVER_PORT_WORKERS
-clientPort = CLIENT_PORT
 
 #TODO: LET THEM DO THE MEAN CALLING EACH OTHER. DO IT THINKING... DONT LET WORKERS INTERACT WITH EACH OTHER IN A CRAZY WAY. MAYBE COMMUNICATE WITH SERVER TO FIND WORKER WILLING TO DO THE MEAN
 
@@ -38,10 +37,10 @@ def handleDataFromClient():
         msgServer("No")
         try:
             data = client.recv(1024)
-            data = pickle.loads(data)
+            clientPort,data = pickle.loads(data)
             print(data)
             result = processData(data)
-            sendResult(result)
+            sendResult(address[0],clientPort,result)
             msgServer("Yes")
         except:
             print('Client has left')
@@ -50,10 +49,10 @@ def handleDataFromClient():
 
 ###TODO Not sure why it is not sending the result to the client
 
-def sendResult(result):
+def sendResult(addressIp,port,result):
     #try:
     connectClient = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    connectClient.connect((host, clientPort))
+    connectClient.connect((addressIp, port))
     resultPickle= pickle.dumps([workerPort,result])
     connectClient.send(resultPickle)
     connectClient.close()
@@ -63,6 +62,7 @@ def sendResult(result):
 
 def processData(data):
     result = sum(data)
+    time.sleep(0)
     return result
 
 

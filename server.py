@@ -11,6 +11,7 @@ notReadyWorkers = [] #list of addresses of the not available workers
 workersLeftToSend = [] #list of tuples [client, nLEumberWorkers], numberWorkers is the number of workers the client still needs
 tsWorkers = {} #dictionary with workerAddress: ts, ts the timestamp of the last interaction we had with the worker
 jobs = {} #dictionary with client: workers, workers processing the client petition at the moment
+mutex = threading.Lock()
 
 def signalHandler(sig, frame):
     print('Closing the server...')
@@ -72,6 +73,11 @@ def listenWorkers():
 		#	worker.close()
 
 def sendWorkers():
+	global mutex
+	global workersLeftToSend
+
+	mutex.acquire()
+
 	#Send to the client the workers it can use
 	noMoreWorkers = False #flag for when we give all the workers
 
@@ -110,7 +116,10 @@ def sendWorkers():
 		if(noMoreWorkers):
 			break
 
+	mutex.release()
+
 def listenClients():
+	global workersLeftToSend
 	#We wait for a connection with a client
 	clientSocket = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
 	clientSocket.bind((HOST,SERVER_PORT_CLIENTS))
@@ -126,7 +135,9 @@ def listenClients():
 
 		#We decide how many workers we give the client and tell the client
 		numberWorkers = min(wantedNodes, MAX_WORKERS)
+		mutex.acquire()
 		workersLeftToSend.append([client,numberWorkers])
+		mutex.release()
 		numberWorkersSerialized = pickle.dumps(numberWorkers)
 		client.send(numberWorkersSerialized)
 
@@ -143,6 +154,7 @@ def listenClients():
 
 
 def checkJobs():
+	global workersLeftToSend
 	#Check the workers in a job are still alive and working
 	while True:
 		for client in jobs.keys():
@@ -165,11 +177,14 @@ def checkJobs():
 				jobs[client] = clientWorkers
 
 				#We update the new number of needed workers by the client
+				mutex.acquire()
 				try:
 					ind = workersLeftToSend.index(client)
 					workersLeftToSend[ind][1] += lenDeathWorkers
 				except:
 					workersLeftToSend.insert(0,[client,lenDeathWorkers])
+				finally:
+					mutex.release()
 				#We send workers if they are free
 				sendWorkers()
 		time.sleep(CHECK_JOBS_SLEEP)

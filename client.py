@@ -48,7 +48,6 @@ def startConnectionToServer():
 
         while(result == None): #while we don't have the number of nodes we asked for
             data = []
-            print(jobsToGetDone)
 
             try:
                 data = connectServer.recv(1024) 
@@ -96,7 +95,7 @@ def sendDataToWorker(df,workerIp,workerPort):
         workerSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         workerSocket.connect((workerIp,workerPort))
         #Serialize the dataset with pickle
-        df_pickled = pickle.dumps(df)
+        df_pickled = pickle.dumps([clientPort,df])
 
 
         #send the serialized dataset with pickle
@@ -123,8 +122,10 @@ def splitDataset(nbNodes):
 def listenResult(nbNodes):
     global connectServer
     global result
+    global clientPort
     partialResult = 0
     numberResultsReceived = 0
+
     clientSocket = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
     clientSocket.bind((host,clientPort))
     clientSocket.listen()
@@ -153,4 +154,9 @@ def listenResult(nbNodes):
            # break
 
 print("Starting the client connection ...")
+
+#We ask for the client port to be used
+clientPort = input("Introduce client port number:\n")
+clientPort = int(clientPort)
+
 startConnectionToServer()
