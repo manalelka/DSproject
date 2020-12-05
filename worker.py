@@ -7,12 +7,9 @@ from include import *
 host = '127.0.0.1'
 serverPort = SERVER_PORT_WORKERS
 
-
-# Creating a worker port to listen to client and possibly with each other?
 workerPort = 1111
-workerServer = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-workerServer.bind((host,workerPort))
-workerServer.listen()
+
+#TODO: LET THEM DO THE MEAN CALLING EACH OTHER. DO IT THINKING... DONT LET WORKERS INTERACT WITH EACH OTHER IN A CRAZY WAY. MAYBE COMMUNICATE WITH SERVER TO FIND WORKER WILLING TO DO THE MEAN
 
 def pingServer():
     while True:
@@ -54,6 +51,13 @@ def processData(data):
     result = sum(data)
     return data
 
+
+# Creating a worker port to listen to client and possibly with each other?
+workerPort = input("Introduce worker port number:\n")
+workerPort = int(workerPort)
+workerServer = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+workerServer.bind((host,workerPort))
+workerServer.listen()
 
 msgServer("Yes")
 pingThread = threading.Thread(target = pingServer)

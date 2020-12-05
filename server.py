@@ -42,28 +42,28 @@ def listenWorkers():
 		#Accept worker connection and process its message
 		worker,address = workersSocket.accept()
 		#Depending on the message save the worker in the corresponding list
-		try:
-			#TODO check msg (correct format)
-			msg = worker.recv(1024)
-			msg = pickle.loads(msg)
-			if msg[0] == 'PING':
-				pass
-			elif msg[0] == 'Yes':
-				moveToAvailable((address[0], int(msg[1])))
-				print("Worker at: " + str(address) + ' port: '+ msg[1] + ' is ready')
-			elif msg[0] == 'No':
-				moveToNotAvailable((address[0], int(msg[1])))
-				print("Worker at: " + str(address) + ' port: ' + msg[1] + ' is not ready')
+		#try:
+		#TODO check msg (correct format)
+		msg = worker.recv(1024)
+		msg = pickle.loads(msg)
+		if msg[0] == 'PING':
+			pass
+		elif msg[0] == 'Yes':
+			moveToAvailable((address[0], int(msg[1])))
+			print("Worker at: " + str(address) + ' port: '+ str(msg[1]) + ' is ready')
+		elif msg[0] == 'No':
+			moveToNotAvailable((address[0], int(msg[1])))
+			print("Worker at: " + str(address) + ' port: ' + str(msg[1]) + ' is not ready')
 
-			#Save the timestamp of the communication to later check dead workers
-			tsWorkers[(address[0], int(msg[1]))] = time.time()
-			#We just received one more worker, so maybe a client can use it.
-			sendWorkers()
-		except:
+		#Save the timestamp of the communication to later check dead workers
+		tsWorkers[(address[0], int(msg[1]))] = time.time()
+		#We just received one more worker, so maybe a client can use it.
+		sendWorkers()
+		#except:
 			#TODO not exactly this but i think even the port is wrong it should then work
-			moveToNotAvailable(address)
-		finally:
-			worker.close()
+		#	moveToNotAvailable(address)
+		#finally:
+		#	worker.close()
 
 def sendWorkers():
 	#Send to the client the workers it can use
@@ -93,7 +93,11 @@ def sendWorkers():
 			if len(workersToSend) > 0:
 				msg =  pickle.dumps([NEW_WORKERS,workersToSend])
 				client.send(msg)
-				jobs[client] += workersToSend
+				if client in jobs:
+					jobs[client] += workersToSend
+				else:
+					jobs[client] = workersToSend
+
 		else:
 			noMoreWorkers = True
 
@@ -108,26 +112,28 @@ def listenClients():
 
 	while True:
 		client, address = clientSocket.accept()
-		try:
-			#We receive from the client how many workers it wants
-			data = client.recv(1024)
-			wantedNodes = int(chr(data[5])) #send 3 ? TODO decide msg
-			print('Client wants ' + str(wantedNodes) + ' workers.')
+	#try:
+		#We receive from the client how many workers it wants
+		data = client.recv(1024)
+		wantedNodes = int(chr(data[5])) #send 3 ? TODO decide msg
+		print('Client wants ' + str(wantedNodes) + ' workers.')
 
-			#We decide how many workers we give the client and tell the client
-			numberWorkers = min(wantedNodes, MAX_WORKERS)
-			workersLeftToSend.append([client,numberWorkers])
-			client.send(str(numberWorkers).encode('ascii'))
+		#We decide how many workers we give the client and tell the client
+		numberWorkers = min(wantedNodes, MAX_WORKERS)
+		workersLeftToSend.append([client,numberWorkers])
+		numberWorkersSerialized = pickle.dumps(numberWorkers)
+		client.send(numberWorkersSerialized)
 
-			print('Sent number of workers:' + str(numberWorkers))
+		print('Sent number of workers:' + str(numberWorkers))
 
-			#We check if there are free workers for the client
-			sendWorkers()
+		#We check if there are free workers for the client
+		sendWorkers()
 
 			#We don't close the connection because we will use it
 			# to inform the client for workers failing and resend workers
-		except:
-			client.close()
+		#except:
+		#	print("Error, client connection closed")
+		#	client.close()
 
 
 def checkJobs():
@@ -154,10 +160,10 @@ def checkJobs():
 
 				#We update the new number of needed workers by the client
 				try:
-					i = workersLeftToSend.index(client)
-					workersLeftToSend[i][1] += lenDeathWorkers
+					ind = workersLeftToSend.index(client)
+					workersLeftToSend[ind][1] += lenDeathWorkers
 				except:
-					workersLeftToSend = [client,lenDeathWorkers] + workersLeftToSend
+					workersLeftToSend.insert(0,[client,lenDeathWorkers])
 				#We send workers if they are free
 				sendWorkers()
 		time.sleep(CHECK_JOBS_SLEEP)
