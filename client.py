@@ -36,8 +36,8 @@ def startConnectionToServer():
             sys.exit(0)
 
         #Send how many nodes the client needs to the server
-        msg = 'Send ' + str(nbNodes)
-        connectServer.send(msg.encode('ascii'))
+        msg = pickle.dumps(['Send', nbNodes])
+        connectServer.send(msg)
         print('Asked for ' + str(nbNodes) + ' nodes')
 
         #We wait for the server to tell us how many workers it gives us and split the data accordingly
@@ -134,17 +134,18 @@ def listenResult(nbNodes):
     global connectServer
     global result
     global clientPort
+    global mutex
     partialResult = 0
     numberResultsReceived = 0
 
     try:
         clientSocket = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+        clientSocket.bind((host,clientPort))
+        clientSocket.listen()
     except Exception as e:
         print("Error listening socket: " + str(e))
         sys.exit(0)
 
-    clientSocket.bind((host,clientPort))
-    clientSocket.listen()
     while True:
         workerSocket,address = clientSocket.accept()
         #try:
@@ -152,10 +153,12 @@ def listenResult(nbNodes):
         workerPort,data = pickle.loads(data)
 
         partialResult += data
+        mutex.acquire()
         print("I received the result (" + str(data) + ") from data partition: " + str(workersJob[(address[0],workerPort)]))
+        mutex.release()
         numberResultsReceived += 1
         if(numberResultsReceived == nbNodes):
-            result = partialResult/nbNodes
+            result = partialResult/len(dataset)
 
             #We close both sockets letting connectServer socket to get out of the recv blocking call when all data is processed
             clientSocket.close()

@@ -5,6 +5,7 @@ import pickle
 import numpy
 from include import *
 import sys
+import os
 
 host = HOST
 serverPort = SERVER_PORT_WORKERS
@@ -16,7 +17,7 @@ def pingServer():
         if msgServer("PING"):
             time.sleep(PING_SLEEP)
         else:
-            sys.exit(0)
+            os._exit(1)
 
 def msgServer(msg):
     #Connecting to server port and sending a message
@@ -53,15 +54,15 @@ def handleDataFromClient():
         except Exception as e:
             print("Error receiving data from client: " + str(e))
             client.close()
-            sys,exit(0)
+            sys.exit(0)
 
         client.close() #TODO not 100 sure
         clientPort,data = pickle.loads(data)
-        print("Received the following data:")
-        print(data)
+        print("Received the following data:" + str(data))
 
         #We process the data received and send it back to the client
         result = processData(data)
+        print('Sending result: ' + str(result))
         sendResult(address[0],clientPort,result)
 
         #We tell the server we are available from now on
@@ -77,7 +78,7 @@ def sendResult(addressIp,port,result):
     except Exception as e:
         print("Error connection socket with client: " + str(e))
         connectClient.close()
-        sys.exit()
+        sys.exit(0)
 
     #We send the result we got
     try:
@@ -86,11 +87,13 @@ def sendResult(addressIp,port,result):
     except Exception as e:
         print("Error sending result to client: " + str(e))
         connectClient.close()
-        sys.exit()
+        sys.exit(0)
     connectClient.close()
 
 
 def processData(data):
+    if type(data) == int or type(data) == float:
+        return data
     result = sum(data)
     #time.sleep(5)
     return result

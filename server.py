@@ -19,29 +19,31 @@ def signalHandler(sig, frame):
     sys.exit(0)
 
 def moveToNotAvailable(address):
-	#Check if it was already between the available workers, delete it if so, and
-	# append it to not ready ones
-	if address not in notReadyWorkers:
-		try:
-			i = availableWorkers.index(address)
-			del availableWorkers[i]
-		except:
-			pass
-		notReadyWorkers.append(address)
+    #Check if it was already between the available workers, delete it if so, and
+    # append it to not ready ones
+    if address not in notReadyWorkers:
+        try:
+            i = availableWorkers.index(address)
+            del availableWorkers[i]
+        except:
+            pass
+        print("Worker at: " + str(address) + ' is not available')
+        notReadyWorkers.append(address)
 
 def moveToAvailable(address):
-	#Check if it was already between not ready workers, delete it if so, and
-	# append it to available ones
-	if address not in availableWorkers:
-		try:
-			i = notReadyWorkers.index(address)
-			del notReadyWorkers[i]
-		except:
-			pass
-		availableWorkers.append(address)
+    #Check if it was already between not ready workers, delete it if so, and
+    # append it to available ones
+    if address not in availableWorkers:
+        try:
+            i = notReadyWorkers.index(address)
+            del notReadyWorkers[i]
+        except:
+            pass
+        print("Worker at: " + str(address) + ' is ready')
+        availableWorkers.append(address)
 
 def listenWorkers():
-	#Create socket to listen to workers
+    #Create socket to listen to workers
     try:
         workersSocket = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
     except Exception as e:
@@ -62,65 +64,63 @@ def listenWorkers():
             pass
         elif msg[0] == 'Yes':
             moveToAvailable((address[0], int(msg[1])))
-            print("Worker at: " + str(address) + ' port: '+ str(msg[1]) + ' is ready')
         elif msg[0] == 'No':
             moveToNotAvailable((address[0], int(msg[1])))
-            print("Worker at: " + str(address) + ' port: ' + str(msg[1]) + ' is not ready')
 
         #Save the timestamp of the communication to later check dead workers
         tsWorkers[(address[0], int(msg[1]))] = time.time()
         #We just received one more worker, so maybe a client can use it.
         sendWorkers()
         #except:
-		#	moveToNotAvailable(address)
-		#finally:
-		#	worker.close()
+        #    moveToNotAvailable(address)
+        #finally:
+        #    worker.close()
 
 def sendWorkers():
-	global mutex
-	global workersLeftToSend
+    global mutex
+    global workersLeftToSend
 
-	mutex.acquire()
+    mutex.acquire()
 
-	#Send to the client the workers it can use
-	noMoreWorkers = False #flag for when we give all the workers
+    #Send to the client the workers it can use
+    noMoreWorkers = False #flag for when we give all the workers
 
-	for job in workersLeftToSend.copy():
-		client = job[0]
-		wantedWorkers = job[1]
-		l = len(availableWorkers)
+    for job in workersLeftToSend.copy():
+        client = job[0]
+        wantedWorkers = job[1]
+        l = len(availableWorkers)
 
-		if l > 0:
-			#If we have more than the needed workers we assign those to the client and continue
-			if l >= wantedWorkers:
-				workersToSend = availableWorkers[:wantedWorkers]
-				workersLeftToSend.remove(job)
-			#else we send the workers we have and update the needed workers by the client
-			else:
-				workersToSend = availableWorkers[:l]
-				ind = workersLeftToSend.index(job)
-				workersLeftToSend[ind][1] = wantedWorkers - l
-				#We don't have more clients to send so we want to end the cycle
-				noMoreWorkers = True
+        if l > 0:
+            #If we have more than the needed workers we assign those to the client and continue
+            if l >= wantedWorkers:
+                workersToSend = availableWorkers[:wantedWorkers]
+                workersLeftToSend.remove(job)
+            #else we send the workers we have and update the needed workers by the client
+            else:
+                workersToSend = availableWorkers[:l]
+                ind = workersLeftToSend.index(job)
+                workersLeftToSend[ind][1] = wantedWorkers - l
+                #We don't have more clients to send so we want to end the cycle
+                noMoreWorkers = True
 
-			for addr in workersToSend:
-				moveToNotAvailable(addr)
+            for addr in workersToSend:
+                moveToNotAvailable(addr)
 
-			if len(workersToSend) > 0:
-				msg =  pickle.dumps([NEW_WORKERS,workersToSend])
-				client.send(msg)
-				if client in jobs:
-					jobs[client] += workersToSend
-				else:
-					jobs[client] = workersToSend
+            if len(workersToSend) > 0:
+                msg =  pickle.dumps([NEW_WORKERS,workersToSend])
+                client.send(msg)
+                if client in jobs:
+                    jobs[client] += workersToSend
+                else:
+                    jobs[client] = workersToSend
 
-		else:
-			noMoreWorkers = True
+        else:
+            noMoreWorkers = True
 
-		if(noMoreWorkers):
-			break
+        if(noMoreWorkers):
+            break
 
-	mutex.release()
+    mutex.release()
 
 def listenClients():
     global workersLeftToSend
@@ -136,13 +136,13 @@ def listenClients():
 
     while True:
         client, address = clientSocket.accept()
-	#try:
-		#We receive from the client how many workers it wants
+    #try:
+        #We receive from the client how many workers it wants
         data = client.recv(1024)
-        wantedNodes = int(chr(data[5]))
+        dum, wantedNodes = pickle.loads(data)
         print('Client wants ' + str(wantedNodes) + ' workers.')
 
-		#We decide how many workers we give the client and tell the client
+        #We decide how many workers we give the client and tell the client
         numberWorkers = min(wantedNodes, MAX_WORKERS)
         mutex.acquire()
         workersLeftToSend.append([client,numberWorkers])
@@ -152,40 +152,40 @@ def listenClients():
 
         print('Sent number of workers:' + str(numberWorkers))
 
-		#We check if there are free workers for the client
+        #We check if there are free workers for the client
         sendWorkers()
 
-			#We don't close the connection because we will use it
-			# to inform the client for workers failing and resend workers
-		#except:
-		#	print("Error, client connection closed")
-		#	client.close()
+            #We don't close the connection because we will use it
+            # to inform the client for workers failing and resend workers
+        #except:
+        #    print("Error, client connection closed")
+        #    client.close()
 
 
 def checkJobs():
     global workersLeftToSend
-	#Check the workers in a job are still alive and working
+    #Check the workers in a job are still alive and working
     while True:
         for client in jobs.keys():
             deadWorkers = []
             clientWorkers = jobs[client]
             for addr in clientWorkers:
                 try:
-					#If it's been inactive for too long we declare it dead
+                    #If it's been inactive for too long we declare it dead
                     i = notReadyWorkers.index(addr)
                     if time.time() - tsWorkers[addr] > MAX_TSDIFF:
                         deadWorkers.append(addr)
                 except:
                     pass
             lenDeathWorkers = len(deadWorkers)
-			#If there are dead workers we search for new workers to substitute the dead
+            #If there are dead workers we search for new workers to substitute the dead
             if lenDeathWorkers > 0:
                 msg =  pickle.dumps([DEAD_WORKERS,deadWorkers])
                 client.send(msg)
                 clientWorkers = list(set(clientWorkers) - set(deadWorkers))
                 jobs[client] = clientWorkers
 
-				#We update the new number of needed workers by the client
+                #We update the new number of needed workers by the client
                 mutex.acquire()
                 try:
                     ind = workersLeftToSend.index(client)
@@ -194,13 +194,13 @@ def checkJobs():
                     workersLeftToSend.insert(0,[client,lenDeathWorkers])
                 finally:
                     mutex.release()
-				#We send workers if they are free
+                #We send workers if they are free
                 sendWorkers()
         time.sleep(CHECK_JOBS_SLEEP)
 
 
 def checkWorkers():
-	#Check ts of workers and, in case it's too large, declare the worker not available
+    #Check ts of workers and, in case it's too large, declare the worker not available
     while True:
         for addr, ts in tsWorkers.items():
             if (time.time() - ts) > MAX_TSDIFF:
@@ -209,7 +209,7 @@ def checkWorkers():
 
 def startServer():
 
-	#We capture SIGINT to end gracefully
+    #We capture SIGINT to end gracefully
     signal.signal(signal.SIGINT, signalHandler)
 
     threadHandleClients = threading.Thread(target=listenClients) #listen from connections from clients
