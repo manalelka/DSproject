@@ -46,19 +46,23 @@ def listenWorkers():
     #Create socket to listen to workers
     try:
         workersSocket = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+        workersSocket.bind((host,SERVER_PORT_WORKERS))
+        workersSocket.listen()
     except Exception as e:
-        print("Error creating socket to listen to workers: " + str(e))
+        print("Error with listening socket to workers: " + str(e))
         sys.exit(0)
-
-    workersSocket.bind((host,SERVER_PORT_WORKERS))
-    workersSocket.listen()
 
     while True:
         #Accept worker connection and process its message
         worker,address = workersSocket.accept()
         #Depending on the message save the worker in the corresponding list
-        #try:
-        msg = worker.recv(1024)
+        try:
+            msg = worker.recv(1024)
+        except Exception as e:
+            print('Error receiving message from worker: ' + str(e))
+            worker.close()
+            break
+
         msg = pickle.loads(msg)
         if msg[0] == 'PING':
             pass
@@ -71,17 +75,12 @@ def listenWorkers():
         tsWorkers[(address[0], int(msg[1]))] = time.time()
         #We just received one more worker, so maybe a client can use it.
         sendWorkers()
-        #except:
-        #    moveToNotAvailable(address)
-        #finally:
-        #    worker.close()
 
 def sendWorkers():
     global mutex
     global workersLeftToSend
 
     mutex.acquire()
-
     #Send to the client the workers it can use
     noMoreWorkers = False #flag for when we give all the workers
 
@@ -108,7 +107,7 @@ def sendWorkers():
 
             if len(workersToSend) > 0:
                 msg =  pickle.dumps([NEW_WORKERS,workersToSend])
-                client.send(msg)
+                client.send(msg) #TODO error closed ?
                 if client in jobs:
                     jobs[client] += workersToSend
                 else:
