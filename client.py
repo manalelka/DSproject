@@ -5,29 +5,36 @@ import numpy as np
 import threading
 from sklearn import datasets
 from include import *
+import sys
 
 
 #dataset = datasets.load_iris() #We'll work with the iris dataset --> we can change later if not suitable
 dataset = np.arange(9.0)
-host = '127.0.0.1'
+host = HOST
 serverPort = SERVER_PORT_CLIENTS
-clientPort = CLIENT_PORT
-workersJob = {}
+workersJob = {} #dictionary with the workers and the part of the dataset they are working on
 jobsToGetDone = None
 
 def startConnectionToServer():
         #Connecting to server port
         global connectServer
         global result
-        connectServer = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        connectServer.connect((host, serverPort))
-
-        #We initialize the result to None
         result = None
 
-        nbNodes = 3
+        #We ask the client how many workers he would want
+        nbNodes = input("How many nodes do you want?:\n")
+        nbNodes = int(nbNodes)
+
+
+        try:
+            connectServer = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        except socket.error as e:
+            print("Error creating socket connection to server: " + e)
+
+        connectServer.connect((host, serverPort))
+
         #Send how many nodes the client needs to the server
-        msg = 'Send ' + str(nbNodes)  #TODO : agree on one message. what is this TODO???
+        msg = 'Send ' + str(nbNodes)
         connectServer.send(msg.encode('ascii'))
         print('Asked for ' + str(nbNodes) + ' nodes')
 
@@ -41,7 +48,6 @@ def startConnectionToServer():
         listenThread = threading.Thread(target = listenResult, args=(nbNodes,))
         listenThread.start()
 
-
         #List of numbers of jobs left to be done in inverse order to pop them in order
         jobsToGetDone = list(range(int(nbNodes)-1,-1,-1))
         #### First part : get list of IP @and ports of nodes and send the splitted data accordingly to the working nodes
@@ -50,7 +56,7 @@ def startConnectionToServer():
             data = []
 
             try:
-                data = connectServer.recv(1024) 
+                data = connectServer.recv(1024)
             except:
                 #This is in case the socket is closed
                 pass
@@ -58,10 +64,6 @@ def startConnectionToServer():
             if(result == None and len(data) != 0):
 
                 flag, addrs = pickle.loads(data) #@ ips and ports of working nodes sent by the server
-                print(jobsToGetDone)
-                #TODO: Remove prints
-                #print(flag)
-                #print(addrs)
 
                 if flag == NEW_WORKERS: #We send data to these new workers
                     for i in range(len(addrs)):
@@ -81,18 +83,21 @@ def startConnectionToServer():
                         workerPort = addrs[i][1]
 
                         #Recover what data needs to be computed again because its worker die
-                        jobNumber = workersJob[(workerIp,workerPort)] 
+                        jobNumber = workersJob[(workerIp,workerPort)]
                         jobsToGetDone.append(jobNumber)
 
                 #### Second part : get the computation result and see if check that it's correct
-                #TODO : get the result of the computation from the workers and mark finished as correct. 
                 #The program wont finish until he receives the result into the socket in the listenThread. If it receives it will close gently I thinkl
 
 
 def sendDataToWorker(df,workerIp,workerPort):
     try:
         #Connect to the worker node
-        workerSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            workerSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        except socket.error as e:
+            print("Error creating sending connection to worker: " + e)
+
         workerSocket.connect((workerIp,workerPort))
         #Serialize the dataset with pickle
         df_pickled = pickle.dumps([clientPort,df])
@@ -118,7 +123,6 @@ def splitDataset(nbNodes):
         print('Error splitting the data')
     return splitDf
 
-### TODO Listening to the result from worker
 def listenResult(nbNodes):
     global connectServer
     global result
@@ -126,7 +130,11 @@ def listenResult(nbNodes):
     partialResult = 0
     numberResultsReceived = 0
 
-    clientSocket = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+    try:
+        clientSocket = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+    except socket.error as e:
+        print("Error listening socket: " + e)
+
     clientSocket.bind((host,clientPort))
     clientSocket.listen()
     while True:
@@ -134,7 +142,7 @@ def listenResult(nbNodes):
         #try:
         data = workerSocket.recv(1024)
         workerPort,data = pickle.loads(data)
-        ### TODO accepting the intermediate result
+
         partialResult += data
         print("I received the result (" + str(data) + ") from data partition: " + str(workersJob[(address[0],workerPort)]))
         numberResultsReceived += 1
@@ -147,7 +155,7 @@ def listenResult(nbNodes):
             connectServer.close()
             print("The result of the mean asked is: " + str(result))
             break
-            
+
         #except:
          #   print('Error receiving result')
           #  clientSocket.close()
@@ -156,7 +164,7 @@ def listenResult(nbNodes):
 print("Starting the client connection ...")
 
 #We ask for the client port to be used
-clientPort = input("Introduce client port number:\n")
+clientPort = input("Input client port number:\n")
 clientPort = int(clientPort)
 
 startConnectionToServer()

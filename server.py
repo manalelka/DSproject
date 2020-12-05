@@ -12,6 +12,7 @@ workersLeftToSend = [] #list of tuples [client, nLEumberWorkers], numberWorkers 
 tsWorkers = {} #dictionary with workerAddress: ts, ts the timestamp of the last interaction we had with the worker
 jobs = {} #dictionary with client: workers, workers processing the client petition at the moment
 mutex = threading.Lock()
+host = HOST
 
 def signalHandler(sig, frame):
     print('Closing the server...')
@@ -41,8 +42,12 @@ def moveToAvailable(address):
 
 def listenWorkers():
 	#Create socket to listen to workers
-	workersSocket = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-	workersSocket.bind((HOST,SERVER_PORT_WORKERS))
+    try:
+        workersSocket = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+    except socket.error as e:
+        print("Error creating socket to listen to workers: " + e)
+
+	workersSocket.bind((host,SERVER_PORT_WORKERS))
 	workersSocket.listen()
 
 	while True:
@@ -50,7 +55,6 @@ def listenWorkers():
 		worker,address = workersSocket.accept()
 		#Depending on the message save the worker in the corresponding list
 		#try:
-		#TODO check msg (correct format)
 		msg = worker.recv(1024)
 		msg = pickle.loads(msg)
 		if msg[0] == 'PING':
@@ -67,7 +71,6 @@ def listenWorkers():
 		#We just received one more worker, so maybe a client can use it.
 		sendWorkers()
 		#except:
-			#TODO not exactly this but i think even the port is wrong it should then work
 		#	moveToNotAvailable(address)
 		#finally:
 		#	worker.close()
@@ -121,8 +124,12 @@ def sendWorkers():
 def listenClients():
 	global workersLeftToSend
 	#We wait for a connection with a client
-	clientSocket = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-	clientSocket.bind((HOST,SERVER_PORT_CLIENTS))
+    try:
+        clientSocket = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+    except socket.error as e:
+        print("Error creating socket connection with client: " + e)
+
+	clientSocket.bind((host,SERVER_PORT_CLIENTS))
 	clientSocket.listen()
 
 	while True:
@@ -130,7 +137,7 @@ def listenClients():
 	#try:
 		#We receive from the client how many workers it wants
 		data = client.recv(1024)
-		wantedNodes = int(chr(data[5])) #send 3 ? TODO decide msg
+		wantedNodes = int(chr(data[5]))
 		print('Client wants ' + str(wantedNodes) + ' workers.')
 
 		#We decide how many workers we give the client and tell the client
