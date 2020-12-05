@@ -16,6 +16,7 @@ workersJob = {}
 result = None
 connectServer = None
 receive = 0
+
 def startConnectionToServer():
         #Connecting to server port
         connectServer = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -112,7 +113,7 @@ def listenResult():
     clientSocket = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
     clientSocket.bind((host,clientPort))
     clientSocket.listen()
-
+    print('Hello')
     while True:
         workerSocket,address = clientSocket.accept()
         try:

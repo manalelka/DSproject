@@ -58,6 +58,7 @@ def sendResult(result):
         except:
             print("An error occurred when sending result to client!")
             connectClient.close()
+def compileResult():
 
 def processData(data):
     time.sleep(5)
