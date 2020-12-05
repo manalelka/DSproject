@@ -109,6 +109,7 @@ def splitDataset(nbNodes):
         print('Error splitting the data')
     return splitDf
 
+### TODO Listening to the result from worker
 def listenResult():
     clientSocket = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
     clientSocket.bind((host,clientPort))
@@ -119,7 +120,7 @@ def listenResult():
         try:
             data = workerSocket.recv(1024)
             data = pickle.loads(data)
-            # TODO accepting the intermediate result
+            ### TODO accepting the intermediate result
             receive += data
             print(receive)
             print("I receive something")

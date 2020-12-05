@@ -45,7 +45,9 @@ def handleDataFromClient():
             print('Client has left')
             client.close()
             break
-#TODO Not sure why it is not sending the result to the client
+
+###TODO Not sure why it is not sending the result to the client
+
 def sendResult(result):
     while result !=None:
         try:
@@ -58,10 +60,8 @@ def sendResult(result):
         except:
             print("An error occurred when sending result to client!")
             connectClient.close()
-def compileResult():
 
 def processData(data):
-    time.sleep(5)
     result = sum(data)
     return data
 
