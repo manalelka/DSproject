@@ -77,7 +77,7 @@ def sendResult(addressIp,port,result):
     except Exception as e:
         print("Error connection socket with client: " + str(e))
         connectClient.close()
-        sys.exit(0)
+        sys.exit()
 
     #We send the result we got
     try:
@@ -86,7 +86,7 @@ def sendResult(addressIp,port,result):
     except Exception as e:
         print("Error sending result to client: " + str(e))
         connectClient.close()
-        sys.exit(0)
+        sys.exit()
     connectClient.close()
 
 
@@ -106,12 +106,12 @@ try:
 except Exception as e:
     print("Error connection socket to listen to the client: " + str(e))
     workerServer.close()
-    sys.exit(0)
+    sys.exit()
 
 #We tell the server we are ready
 if not msgServer("Yes"):
     workerServer.close()
-    sys.exit(0)
+    sys.exit()
 
 #We ping the server from time to time so that it knows we are alive
 pingThread = threading.Thread(target = pingServer)

@@ -14,24 +14,26 @@ host = HOST
 serverPort = SERVER_PORT_CLIENTS
 workersJob = {} #dictionary with the workers and the part of the dataset they are working on
 jobsToGetDone = None
+mutex = threading.Lock()
 
 def startConnectionToServer():
         #Connecting to server port
         global connectServer
         global result
+        global mutex
         result = None
 
         #We ask the client how many workers he would want
         nbNodes = input("How many nodes do you want?:\n")
         nbNodes = int(nbNodes)
 
-
         try:
             connectServer = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        except socket.error as e:
-            print("Error creating socket connection to server: " + e)
-
-        connectServer.connect((host, serverPort))
+            connectServer.connect((host, serverPort))
+        except Exception as e:
+            print("Error with socket connection to server: " + str(e))
+            connectServer.close()
+            sys.exit(0)
 
         #Send how many nodes the client needs to the server
         msg = 'Send ' + str(nbNodes)
@@ -74,7 +76,9 @@ def startConnectionToServer():
                         sendDataToWorker(datasets[jobNumber],workerIp,workerPort)
 
                         #We add to workersJob what job is this worker going to do
+                        mutex.acquire()
                         workersJob[(workerIp,workerPort)] = jobNumber
+                        mutex.release()
 
                 elif flag == DEAD_WORKERS: #These workers are dead
                     #we decrease the number of the "good" nodes that way we know that the server is going to send another worker
@@ -83,7 +87,9 @@ def startConnectionToServer():
                         workerPort = addrs[i][1]
 
                         #Recover what data needs to be computed again because its worker die
+                        mutex.acquire()
                         jobNumber = workersJob[(workerIp,workerPort)]
+                        mutex.release()
                         jobsToGetDone.append(jobNumber)
 
                 #### Second part : get the computation result and see if check that it's correct
@@ -95,8 +101,9 @@ def sendDataToWorker(df,workerIp,workerPort):
         #Connect to the worker node
         try:
             workerSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        except socket.error as e:
-            print("Error creating sending connection to worker: " + e)
+        except Exception as e:
+            print("Error creating sending connection to worker: " + str(e))
+            sys.exit(0)
 
         workerSocket.connect((workerIp,workerPort))
         #Serialize the dataset with pickle
@@ -132,8 +139,9 @@ def listenResult(nbNodes):
 
     try:
         clientSocket = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-    except socket.error as e:
-        print("Error listening socket: " + e)
+    except Exception as e:
+        print("Error listening socket: " + str(e))
+        sys.exit(0)
 
     clientSocket.bind((host,clientPort))
     clientSocket.listen()

@@ -44,33 +44,34 @@ def listenWorkers():
 	#Create socket to listen to workers
     try:
         workersSocket = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-    except socket.error as e:
-        print("Error creating socket to listen to workers: " + e)
+    except Exception as e:
+        print("Error creating socket to listen to workers: " + str(e))
+        sys.exit(0)
 
-	workersSocket.bind((host,SERVER_PORT_WORKERS))
-	workersSocket.listen()
+    workersSocket.bind((host,SERVER_PORT_WORKERS))
+    workersSocket.listen()
 
-	while True:
-		#Accept worker connection and process its message
-		worker,address = workersSocket.accept()
-		#Depending on the message save the worker in the corresponding list
-		#try:
-		msg = worker.recv(1024)
-		msg = pickle.loads(msg)
-		if msg[0] == 'PING':
-			pass
-		elif msg[0] == 'Yes':
-			moveToAvailable((address[0], int(msg[1])))
-			print("Worker at: " + str(address) + ' port: '+ str(msg[1]) + ' is ready')
-		elif msg[0] == 'No':
-			moveToNotAvailable((address[0], int(msg[1])))
-			print("Worker at: " + str(address) + ' port: ' + str(msg[1]) + ' is not ready')
+    while True:
+        #Accept worker connection and process its message
+        worker,address = workersSocket.accept()
+        #Depending on the message save the worker in the corresponding list
+        #try:
+        msg = worker.recv(1024)
+        msg = pickle.loads(msg)
+        if msg[0] == 'PING':
+            pass
+        elif msg[0] == 'Yes':
+            moveToAvailable((address[0], int(msg[1])))
+            print("Worker at: " + str(address) + ' port: '+ str(msg[1]) + ' is ready')
+        elif msg[0] == 'No':
+            moveToNotAvailable((address[0], int(msg[1])))
+            print("Worker at: " + str(address) + ' port: ' + str(msg[1]) + ' is not ready')
 
-		#Save the timestamp of the communication to later check dead workers
-		tsWorkers[(address[0], int(msg[1]))] = time.time()
-		#We just received one more worker, so maybe a client can use it.
-		sendWorkers()
-		#except:
+        #Save the timestamp of the communication to later check dead workers
+        tsWorkers[(address[0], int(msg[1]))] = time.time()
+        #We just received one more worker, so maybe a client can use it.
+        sendWorkers()
+        #except:
 		#	moveToNotAvailable(address)
 		#finally:
 		#	worker.close()
@@ -122,36 +123,37 @@ def sendWorkers():
 	mutex.release()
 
 def listenClients():
-	global workersLeftToSend
-	#We wait for a connection with a client
+    global workersLeftToSend
+    #We wait for a connection with a client
     try:
         clientSocket = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-    except socket.error as e:
-        print("Error creating socket connection with client: " + e)
+    except Exception as e:
+        print("Error creating socket connection with client: " + str(e))
+        sys.exit(0)
 
-	clientSocket.bind((host,SERVER_PORT_CLIENTS))
-	clientSocket.listen()
+    clientSocket.bind((host,SERVER_PORT_CLIENTS))
+    clientSocket.listen()
 
-	while True:
-		client, address = clientSocket.accept()
+    while True:
+        client, address = clientSocket.accept()
 	#try:
 		#We receive from the client how many workers it wants
-		data = client.recv(1024)
-		wantedNodes = int(chr(data[5]))
-		print('Client wants ' + str(wantedNodes) + ' workers.')
+        data = client.recv(1024)
+        wantedNodes = int(chr(data[5]))
+        print('Client wants ' + str(wantedNodes) + ' workers.')
 
 		#We decide how many workers we give the client and tell the client
-		numberWorkers = min(wantedNodes, MAX_WORKERS)
-		mutex.acquire()
-		workersLeftToSend.append([client,numberWorkers])
-		mutex.release()
-		numberWorkersSerialized = pickle.dumps(numberWorkers)
-		client.send(numberWorkersSerialized)
+        numberWorkers = min(wantedNodes, MAX_WORKERS)
+        mutex.acquire()
+        workersLeftToSend.append([client,numberWorkers])
+        mutex.release()
+        numberWorkersSerialized = pickle.dumps(numberWorkers)
+        client.send(numberWorkersSerialized)
 
-		print('Sent number of workers:' + str(numberWorkers))
+        print('Sent number of workers:' + str(numberWorkers))
 
 		#We check if there are free workers for the client
-		sendWorkers()
+        sendWorkers()
 
 			#We don't close the connection because we will use it
 			# to inform the client for workers failing and resend workers
@@ -161,68 +163,68 @@ def listenClients():
 
 
 def checkJobs():
-	global workersLeftToSend
+    global workersLeftToSend
 	#Check the workers in a job are still alive and working
-	while True:
-		for client in jobs.keys():
-			deadWorkers = []
-			clientWorkers = jobs[client]
-			for addr in clientWorkers:
-				try:
+    while True:
+        for client in jobs.keys():
+            deadWorkers = []
+            clientWorkers = jobs[client]
+            for addr in clientWorkers:
+                try:
 					#If it's been inactive for too long we declare it dead
-					i = notReadyWorkers.index(addr)
-					if time.time() - tsWorkers[addr] > MAX_TSDIFF:
-						deadWorkers.append(addr)
-				except:
-					pass
-			lenDeathWorkers = len(deadWorkers)
+                    i = notReadyWorkers.index(addr)
+                    if time.time() - tsWorkers[addr] > MAX_TSDIFF:
+                        deadWorkers.append(addr)
+                except:
+                    pass
+            lenDeathWorkers = len(deadWorkers)
 			#If there are dead workers we search for new workers to substitute the dead
-			if lenDeathWorkers > 0:
-				msg =  pickle.dumps([DEAD_WORKERS,deadWorkers])
-				client.send(msg)
-				clientWorkers = list(set(clientWorkers) - set(deadWorkers))
-				jobs[client] = clientWorkers
+            if lenDeathWorkers > 0:
+                msg =  pickle.dumps([DEAD_WORKERS,deadWorkers])
+                client.send(msg)
+                clientWorkers = list(set(clientWorkers) - set(deadWorkers))
+                jobs[client] = clientWorkers
 
 				#We update the new number of needed workers by the client
-				mutex.acquire()
-				try:
-					ind = workersLeftToSend.index(client)
-					workersLeftToSend[ind][1] += lenDeathWorkers
-				except:
-					workersLeftToSend.insert(0,[client,lenDeathWorkers])
-				finally:
-					mutex.release()
+                mutex.acquire()
+                try:
+                    ind = workersLeftToSend.index(client)
+                    workersLeftToSend[ind][1] += lenDeathWorkers
+                except:
+                    workersLeftToSend.insert(0,[client,lenDeathWorkers])
+                finally:
+                    mutex.release()
 				#We send workers if they are free
-				sendWorkers()
-		time.sleep(CHECK_JOBS_SLEEP)
+                sendWorkers()
+        time.sleep(CHECK_JOBS_SLEEP)
 
 
 def checkWorkers():
 	#Check ts of workers and, in case it's too large, declare the worker not available
-	while True:
-		for addr, ts in tsWorkers.items():
-			if (time.time() - ts) > MAX_TSDIFF:
-				moveToNotAvailable(addr)
-		time.sleep(CHECK_WORKERS_SLEEP)
+    while True:
+        for addr, ts in tsWorkers.items():
+            if (time.time() - ts) > MAX_TSDIFF:
+                moveToNotAvailable(addr)
+        time.sleep(CHECK_WORKERS_SLEEP)
 
 def startServer():
 
 	#We capture SIGINT to end gracefully
-	signal.signal(signal.SIGINT, signalHandler)
+    signal.signal(signal.SIGINT, signalHandler)
 
-	threadHandleClients = threading.Thread(target=listenClients) #listen from connections from clients
-	threadHandleClients.start()
+    threadHandleClients = threading.Thread(target=listenClients) #listen from connections from clients
+    threadHandleClients.start()
 
-	threadHandleWorkers = threading.Thread(target=listenWorkers) #listen from connections from workers
-	threadHandleWorkers.start()
+    threadHandleWorkers = threading.Thread(target=listenWorkers) #listen from connections from workers
+    threadHandleWorkers.start()
 
-	threadJobs = threading.Thread(target=checkJobs) #check if jobs are fine or else warns the client
-	threadJobs.start()
+    threadJobs = threading.Thread(target=checkJobs) #check if jobs are fine or else warns the client
+    threadJobs.start()
 
-	threadCheckWorkers = threading.Thread(target=checkWorkers) #check if workers are dead
-	threadCheckWorkers.start()
+    threadCheckWorkers = threading.Thread(target=checkWorkers) #check if workers are dead
+    threadCheckWorkers.start()
 
-	print("Server started")
+    print("Server started")
 
 print('Server is starting')
 startServer()
