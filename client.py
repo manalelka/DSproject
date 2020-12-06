@@ -6,6 +6,7 @@ import threading
 from sklearn import datasets
 from include import *
 import sys
+import os
 
 
 #dataset = datasets.load_iris() #We'll work with the iris dataset --> we can change later if not suitable
@@ -60,9 +61,8 @@ def startConnectionToServer():
         jobsToGetDone = list(range(int(nbNodes)-1,-1,-1))
         #### First part : get list of IP @and ports of nodes and send the splitted data accordingly to the working nodes
 
-        while(result == None): #while we don't have the number of nodes we asked for
+        while(result == None): #while we dont have a result
             data = []
-
             try:
                 data = connectServer.recv(1024)
             except:
@@ -86,7 +86,6 @@ def startConnectionToServer():
                         mutex.release()
 
                 elif flag == DEAD_WORKERS: #These workers are dead
-                    #we decrease the number of the "good" nodes that way we know that the server is going to send another worker
                     for i in range(len(addrs)):
                         workerIp = addrs[i][0]
                         workerPort = addrs[i][1]
@@ -97,7 +96,6 @@ def startConnectionToServer():
                         mutex.release()
                         jobsToGetDone.append(jobNumber)
 
-                #### Second part : get the computation result and see if check that it's correct
                 #The program wont finish until he receives the result into the socket in the listenThread. If it receives it will close gently I thinkl
 
 
@@ -107,17 +105,21 @@ def sendDataToWorker(df,workerIp,workerPort):
         workerSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         workerSocket.connect((workerIp,workerPort))
     except Exception as e:
-        print("Error with the connection socket to worker: " + str(e))
-        sys.exit(0)
+        print("Error with the connection to worker " + str((workerPort)) + str(e))
+        workerSocket.close()
+        sys.exit(1)
+        #TODO there was an error so didnt send update info
 
     #Serialize the dataset with pickle
     df_pickled = pickle.dumps([clientPort,df])
 
+    print("Sending to worker: " + str(df))
     #send the serialized dataset with pickle
     try:
         workerSocket.send(df_pickled)
     except:
         print("Error sending data to worker: " + str(e))
+        #TODO there was an error so didnt send update info
 
     #close the connection with the worker
     workerSocket.close()
@@ -145,7 +147,8 @@ def listenResult(nbNodes):
         clientSocket.listen()
     except Exception as e:
         print("Error with listening socket: " + str(e))
-        sys.exit(0)
+        clientSocket.close()
+        os._exit(1)
 
     #We wait for the result to come
     partialResult = 0

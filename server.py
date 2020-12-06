@@ -4,6 +4,7 @@ import time
 import pickle
 import signal
 import sys
+import os
 from include import *
 
 availableWorkers = [] #list of addresses of the available workers
@@ -107,7 +108,10 @@ def sendWorkers():
 
             if len(workersToSend) > 0:
                 msg =  pickle.dumps([NEW_WORKERS,workersToSend])
-                client.send(msg) #TODO error closed ?
+                try:
+                    client.send(msg) #TODO error closed ?
+                except Exception as e:
+                    print('Error new workers to client: ' + str(e))
                 if client in jobs:
                     jobs[client] += workersToSend
                 else:
@@ -115,10 +119,8 @@ def sendWorkers():
 
         else:
             noMoreWorkers = True
-
         if(noMoreWorkers):
             break
-
     mutex.release()
 
 def listenClients():
@@ -126,18 +128,28 @@ def listenClients():
     #We wait for a connection with a client
     try:
         clientSocket = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+        clientSocket.bind((host,SERVER_PORT_CLIENTS))
+        clientSocket.listen()
     except Exception as e:
-        print("Error creating socket connection with client: " + str(e))
-        sys.exit(0)
-
-    clientSocket.bind((host,SERVER_PORT_CLIENTS))
-    clientSocket.listen()
+        print("Error with connection socket with client: " + str(e))
+        os._exit(1)
 
     while True:
-        client, address = clientSocket.accept()
-    #try:
-        #We receive from the client how many workers it wants
-        data = client.recv(1024)
+        try:
+            client, address = clientSocket.accept()
+        except Exception as e:
+            print("Error connecting with client: " + str(e))
+            client.close()
+            continue
+
+        try:
+            #We receive from the client how many workers it wants
+            data = client.recv(1024)
+        except Exception as e:
+            print("Error receiving from client: " + str(e))
+            client.close()
+            continue
+
         dum, wantedNodes = pickle.loads(data)
         print('Client wants ' + str(wantedNodes) + ' workers.')
 
@@ -147,18 +159,21 @@ def listenClients():
         workersLeftToSend.append([client,numberWorkers])
         mutex.release()
         numberWorkersSerialized = pickle.dumps(numberWorkers)
-        client.send(numberWorkersSerialized)
 
-        print('Sent number of workers:' + str(numberWorkers))
+        try:
+            client.send(numberWorkersSerialized)
+        except Exception as e:
+            print("Error sending number of workers to client: " + str(e))
+            client.close()
+            continue
+
+        print('Sent number of workers: ' + str(numberWorkers))
 
         #We check if there are free workers for the client
         sendWorkers()
 
-            #We don't close the connection because we will use it
-            # to inform the client for workers failing and resend workers
-        #except:
-        #    print("Error, client connection closed")
-        #    client.close()
+        #We don't close the connection because we will use it
+        # to inform the client for workers failing and resend workers
 
 
 def checkJobs():
@@ -180,7 +195,12 @@ def checkJobs():
             #If there are dead workers we search for new workers to substitute the dead
             if lenDeathWorkers > 0:
                 msg =  pickle.dumps([DEAD_WORKERS,deadWorkers])
-                client.send(msg)
+
+                try:
+                    client.send(msg)
+                except Exception as e:
+                    print("Error sending dead workers to client: " + str(e)) #TODO maybe try again?
+
                 clientWorkers = list(set(clientWorkers) - set(deadWorkers))
                 jobs[client] = clientWorkers
 

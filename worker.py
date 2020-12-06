@@ -2,7 +2,7 @@ import threading
 import socket
 import time
 import pickle
-import numpy
+import numpy as np
 from include import *
 import sys
 import os
@@ -42,11 +42,12 @@ def handleDataFromClient():
         except Exception as e:
             print("Error accepting client connection: " + str(e))
             client.close()
+            continue
 
         #We tell the server we are not ready
         if not msgServer("No"):
             client.close()
-            sys.exit(0)
+            os._exit(1)
 
         #We expect a dataset from the client
         try:
@@ -55,10 +56,11 @@ def handleDataFromClient():
             print("Error receiving data from client: " + str(e))
             client.close()
             sys.exit(0)
+            #TODO kill completely or tell server im up again
 
-        client.close() #TODO not 100 sure
+        #client.close() #TODO not 100 sure
         clientPort,data = pickle.loads(data)
-        print("Received the following data:" + str(data))
+        print("Received the following data: " + str(data))
 
         #We process the data received and send it back to the client
         result = processData(data)
@@ -78,7 +80,7 @@ def sendResult(addressIp,port,result):
     except Exception as e:
         print("Error connection socket with client: " + str(e))
         connectClient.close()
-        sys.exit(0)
+        return
 
     #We send the result we got
     try:
@@ -86,13 +88,12 @@ def sendResult(addressIp,port,result):
         connectClient.send(resultPickle)
     except Exception as e:
         print("Error sending result to client: " + str(e))
+    finally:
         connectClient.close()
-        sys.exit(0)
-    connectClient.close()
 
 
 def processData(data):
-    if type(data) == int or type(data) == float:
+    if type(data) == int or type(data) == float or type(data) == np.float64:
         return data
     result = sum(data)
     #time.sleep(5)
@@ -109,16 +110,17 @@ try:
 except Exception as e:
     print("Error connection socket to listen to the client: " + str(e))
     workerServer.close()
-    sys.exit()
+    sys.exit(1)
 
 #We tell the server we are ready
 if not msgServer("Yes"):
     workerServer.close()
-    sys.exit()
+    sys.exit(1)
 
 #We ping the server from time to time so that it knows we are alive
 pingThread = threading.Thread(target = pingServer)
 pingThread.start()
+
 #We start a thread to handle the data sent from the client
 handleDataThread = threading.Thread(target = handleDataFromClient)
 handleDataThread.start()
