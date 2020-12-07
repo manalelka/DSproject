@@ -11,6 +11,7 @@ import os
 
 # dataset = datasets.load_iris() #We'll work with the iris dataset --> we can change later if not suitable
 dataset = np.arange(9.0)
+len_dataset = len(dataset)
 host = HOST
 serverPort = SERVER_PORT_CLIENTS
 workersJob = {}  # dictionary with the workers and the part of the dataset they are working on
@@ -107,7 +108,7 @@ def sendDataToWorker(df, workerIp, workerPort):
         print("Error with the connection to worker " + str((workerPort)) + str(e))
         workerSocket.close()
         sys.exit(1)
-        # TODO there was an error so didnt send update info 
+        # TODO there was an error so didnt send update info
         # TODO : should we notify the server or send the data subset to another worker ?
 
     # Serialize the dataset with pickle
@@ -161,12 +162,13 @@ def listenResult(nbNodes):
         except Exception as e:
             print("Error with worker socket: " + str(e))
             clientSocket.close()
-            connectServer.close()
+            #workerSocket.close()
             break
 
         workerPort, data = pickle.loads(data)
 
-        partialResult += data
+        num, mean = data
+        partialResult += mean * (num / len_dataset)
         mutex.acquire()
         print("I received the result (" + str(data) + ") from data partition: " +
               str(workersJob[(address[0], workerPort)]))
@@ -174,10 +176,10 @@ def listenResult(nbNodes):
         numberResultsReceived += 1
 
         if(numberResultsReceived == nbNodes):
-            result = partialResult/len(dataset)
+            result = partialResult
 
             # We close both sockets letting connectServer socket to get out of the recv blocking call when all data is processed
-            
+            workerSocket.close()
             clientSocket.close()
             connectServer.shutdown(socket.SHUT_RDWR)
             connectServer.close()

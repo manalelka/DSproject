@@ -102,10 +102,10 @@ def sendResult(addressIp,port,result):
 
 def processData(data):
     if type(data) == int or type(data) == float or type(data) == np.float64:
-        return data
+        return [1, data]
     result = statistics.mean(data)
     #time.sleep(5)
-    return result
+    return [len(data), result]
 
 #Creating a worker port to listen to client
 workerPort = input("Introduce worker port number:\n")
