@@ -9,9 +9,11 @@ import sys
 import os
 import time
 import openpyxl
-
+import random
 # dataset = datasets.load_iris() #We'll work with the iris dataset --> we can change later if not suitable
-dataset = np.arange(9.0)
+dataset = [5000]*5000000
+#dataset = random.sample(range(1,1000000),500000)
+print(dataset)
 host = HOST
 serverPort = SERVER_PORT_CLIENTS
 workersJob = {}  # dictionary with the workers and the part of the dataset they are working on
@@ -64,6 +66,7 @@ def startConnectionToServer():
 
     while(result == None):  # while we dont have a result
         data = []
+
         try:
             data = connectServer.recv(1024)
         except:
@@ -301,7 +304,7 @@ for i in range (totalRuns):
     print(timeTaken,result) # Print the result to ensure that the result it receives isn't null
     totalTimeTaken += timeTaken
     sheet[column+str(i+1)]= totalTimeTaken
-    time.sleep(1) # Need to sleep for 1 sec or else the client would get stuck
+    time.sleep(2) # Need to sleep for 1 sec or else the client would get stuck
 
 wb.save('Logging.xlsx')
 
