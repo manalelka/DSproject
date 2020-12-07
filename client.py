@@ -108,7 +108,6 @@ def sendDataToWorker(df, workerIp, workerPort):
         print("Error with the connection to worker " + str((workerPort)) + str(e))
         workerSocket.close()
         sys.exit(1)
-        # TODO there was an error so didnt send update info
         # TODO : should we notify the server or send the data subset to another worker ?
 
     # Serialize the dataset with pickle
@@ -120,7 +119,7 @@ def sendDataToWorker(df, workerIp, workerPort):
         workerSocket.send(df_pickled)
     except:
         print("Error sending data to worker: " + str(e))
-        # TODO there was an error so didnt send update info
+        # TODO : should we notify the server or send the data subset to another worker ?
 
     # close the connection with the worker
     workerSocket.close()
