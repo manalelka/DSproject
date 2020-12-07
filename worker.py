@@ -101,9 +101,12 @@ def sendResult(addressIp,port,result):
 
 
 def processData(data):
-    if type(data) == int or type(data) == float or type(data) == np.float64:
-        return [1, data]
-    result = statistics.mean(data)
+    #if type(data) == int or type(data) == float or type(data) == np.float64:
+    #    return [1, data]
+    len_data = len(data)
+    result = 0
+    for num in data:
+        result += num / len_data
     #time.sleep(5)
     return [len(data), result]
 
