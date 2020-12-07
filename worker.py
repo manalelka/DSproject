@@ -10,8 +10,6 @@ import os
 host = HOST
 serverPort = SERVER_PORT_WORKERS
 
-#TODO: LET THEM DO THE MEAN CALLING EACH OTHER. DO IT THINKING... DONT LET WORKERS INTERACT WITH EACH OTHER IN A CRAZY WAY. MAYBE COMMUNICATE WITH SERVER TO FIND WORKER WILLING TO DO THE MEAN
-
 def pingServer():
     while True:
         if msgServer("PING"):
@@ -57,6 +55,9 @@ def handleDataFromClient():
             client.close()
             sys.exit(0)
             #TODO kill completely or tell server im up again
+            #We tell the server we are ready again
+            if not msgServer("Yes"):
+                sys.exit(0)
 
         #client.close() #TODO not 100 sure
         clientPort,data = pickle.loads(data)
