@@ -75,7 +75,6 @@ def main():
             data = connectServer.recv(1024)
         except Exception as e:
             # This is in case the socket is closed
-            print(e)
             pass
 
         if(result == None and len(data) != 0):
@@ -190,24 +189,25 @@ def listenResult(nbNodes):
 
         workerPort, data = pickle.loads(data)
 
-        num, mean = data
-        partialResult += mean * (num / len_dataset)
-        mutex.acquire()
-        print("I received the result (" + str(data) + ") from data partition: " +
-              str(workersJob[(address[0], workerPort)]))
-        mutex.release()
-        numberResultsReceived += 1
+        if len(data) == 2:
+            num, mean = data
+            partialResult += mean * (num / len_dataset)
+            mutex.acquire()
+            print("I received the result (" + str(data) + ") from data partition: " +
+                  str(workersJob[(address[0], workerPort)]))
+            mutex.release()
+            numberResultsReceived += 1
 
-        if(numberResultsReceived == nbNodes):
-            result = round(partialResult, meanDecimals)
+            if(numberResultsReceived == nbNodes):
+                result = round(partialResult, meanDecimals)
 
-            # We close both sockets letting connectServer socket to get out of the recv blocking call when all data is processed
-            workerSocket.close()
-            clientSocket.close()
-            connectServer.shutdown(socket.SHUT_RDWR)
-            connectServer.close()
-            print("The result of the mean asked is: " + str(result))
-            break
+                # We close both sockets letting connectServer socket to get out of the recv blocking call when all data is processed
+                workerSocket.close()
+                clientSocket.close()
+                connectServer.shutdown(socket.SHUT_RDWR)
+                connectServer.close()
+                print("The result of the mean asked is: " + str(result))
+                break
 
 
 print("Starting the client connection ...")

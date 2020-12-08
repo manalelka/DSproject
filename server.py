@@ -10,8 +10,7 @@ from include import *
 
 availableWorkers = []  # list of addresses of the available workers
 notReadyWorkers = []  # list of addresses of the not available workers
-# list of tuples [client, numberWorkers], numberWorkers is the number of workers the client still needs
-workersLeftToSend = []
+workersLeftToSend = {} # dictionary with client: numberWorkers, numberWorkers is the number of workers the client still needs
 tsWorkers = {}  # dictionary with workerAddress: ts, ts the timestamp of the last interaction we had with the worker
 jobs = {}  # dictionary with client: workers, workers processing the client petition at the moment
 mutex = threading.Lock()
@@ -19,6 +18,8 @@ mutexJobs = threading.Lock()
 mutexNotAvailable = threading.Lock()
 mutexAvailable = threading.Lock()
 host = HOST
+
+
 
 
 def signalHandler(sig, frame):
@@ -101,9 +102,10 @@ def sendWorkers():
     # Send to the client the workers it can use
     noMoreWorkers = False  # flag for when we give all the workers
 
-    for job in workersLeftToSend.copy():
-        client = job[0]
-        wantedWorkers = job[1]
+    dictCopy = workersLeftToSend.copy()
+    for job in dictCopy.keys():
+        client = job
+        wantedWorkers = workersLeftToSend[job]
         l = len(availableWorkers)
         workersToSend = []
 
@@ -111,17 +113,13 @@ def sendWorkers():
             # If we have more than the needed workers we assign those to the client and continue
             if l >= wantedWorkers:
                 workersToSend = availableWorkers[:wantedWorkers]
-                workersLeftToSend.remove(job)
+                del workersLeftToSend[client]
             # else we send the workers we have and update the needed workers by the client
             else:
                 workersToSend = availableWorkers[:l]
-                ind = workersLeftToSend.index(job)
-                workersLeftToSend[ind][1] = wantedWorkers - l
+                workersLeftToSend[client] = wantedWorkers - l
                 # We don't have more clients to send so we want to end the cycle
                 noMoreWorkers = True
-
-            for addr in workersToSend:
-                moveToNotAvailable(addr)
 
             length = len(workersToSend)
 
@@ -133,16 +131,20 @@ def sendWorkers():
 
                 except socket.error as e:
                     if job in workersLeftToSend:
-                        workersLeftToSend.remove(job)
+                        del workersLeftToSend[client]
                     mutexJobs.acquire()
                     jobs.pop(client, None)
                     mutexJobs.release()
-                    print('Error sending to client: ' + str(e))
+                    print('Warning: error sending to client: ' + str(e))
                     continue
 
                 except Exception as exce:
                     print('Error new workers to client: ' + str(exce))
                     continue
+
+
+                for addr in workersToSend:
+                    moveToNotAvailable(addr)
 
                 mutexJobs.acquire()
                 if client in jobs:
@@ -199,7 +201,7 @@ def listenClients():
             continue
 
         mutex.acquire()
-        workersLeftToSend.append([client, numberWorkers])
+        workersLeftToSend[client] = numberWorkers
         mutex.release()
 
         print('Sent number of workers: ' + str(numberWorkers))
@@ -238,8 +240,8 @@ def checkJobs():
 
                 except socket.error as e:
                     mutex.acquire()
-                    if [client, len(jobs[client])] in workersLeftToSend:
-                        workersLeftToSend.remove([client, len(jobs[client])])
+                    if client in workersLeftToSend:
+                        del workersLeftToSend[client]
                     mutex.release()
                     mutexJobs.acquire()
                     jobs.pop(client, None)
@@ -256,10 +258,9 @@ def checkJobs():
                 # We update the new number of needed workers by the client
                 mutex.acquire()
                 try:
-                    ind = workersLeftToSend.index(client)
-                    workersLeftToSend[ind][1] += lenDeathWorkers
+                    workersLeftToSend[client] += lenDeathWorkers
                 except:
-                    workersLeftToSend.insert(0, [client, lenDeathWorkers])
+                    workersLeftToSend[client] = lenDeathWorkers
                 finally:
                     mutex.release()
                 # We send workers if they are free

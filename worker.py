@@ -108,6 +108,8 @@ def meanData(ary):
 
 def processData(data):
     result = meanData(data)
+    #In case you want to kill workers and see the fault tolerance
+    #time.sleep(1)
     return [len(data), result]
 
 
