@@ -8,7 +8,7 @@ Our application is a distributed system that serves as a tool for distributed an
 
 Our code consists of three main components : client.py , server.py and worker.py.
 
-![Simplified architecture of the application](https://i.imgur.com/c4qEIAd.png)
+![Simplified architecture of the application](https://i.imgur.com/023z9Ta.png)
 
 
 
