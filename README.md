@@ -22,7 +22,7 @@ The server has the main role of managing a queue of the working nodes and establ
 
 **- Worker** :
 
-The workers are able to communicate with the server to let him know where they are available and calculate partial results that are sent to the client.
+The workers are able to communicate with the server to let him know when they are available and calculate partial results that are sent to the client.
 
 ## Usage 
 
