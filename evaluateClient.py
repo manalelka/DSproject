@@ -350,5 +350,5 @@ for i in range(numberOfWorkers):
         time.sleep(1)
     sheet[columns[i]+str(size)] = totalTimeTaken
 
-wb.save('Logging.xlsx')
+wb.save('LoggingData.xlsx')
 
