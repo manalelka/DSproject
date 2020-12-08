@@ -19,9 +19,11 @@ workersJob = {}  # dictionary with the workers and the part of the dataset they 
 jobsToGetDone = None
 mutex = threading.Lock()
 
+
 def signalHandler(sig, frame):
     print('Closing the client...')
     sys.exit(0)
+
 
 def main():
     # Connecting to server port
@@ -76,19 +78,16 @@ def main():
             print(e)
             pass
 
-
         if(result == None and len(data) != 0):
 
-
             data = data.decode("utf-8")
-            jsons = data.split("][")   
+            jsons = data.split("][")
 
-            if(len(jsons) > 1): 
+            if(len(jsons) > 1):
                 jsons[0] += "]"
-                for item in range(1,len(jsons)-1):
+                for item in range(1, len(jsons)-1):
                     item = "[" + item + "]"
                 jsons[len(jsons)-1] = "[" + jsons[len(jsons)-1]
-
 
             for data in jsons:
                 data = json.loads(data)
@@ -101,7 +100,8 @@ def main():
                         workerPort = addrs[i][1]
 
                         jobNumber = jobsToGetDone.pop()
-                        sendDataToWorker(datasets[jobNumber], workerIp, workerPort)
+                        sendDataToWorker(
+                            datasets[jobNumber], workerIp, workerPort)
 
                         # We add to workersJob what job is this worker going to do
                         mutex.acquire()
@@ -119,7 +119,7 @@ def main():
                         mutex.release()
                         jobsToGetDone.append(jobNumber)
 
-    #We have received the result so we close the program
+    # We have received the result so we close the program
     sys.exit(0)
 
 
@@ -129,7 +129,8 @@ def sendDataToWorker(df, workerIp, workerPort):
         workerSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         workerSocket.connect((workerIp, workerPort))
     except Exception as e:
-        print("Warning: connection not established with worker " + str((workerPort)) + ' ' + str(e))
+        print("Warning: connection not established with worker " +
+              str((workerPort)) + ' ' + str(e))
         workerSocket.close()
         return
 
@@ -164,7 +165,7 @@ def listenResult(nbNodes):
     global mutex
     global clientSocket
 
-    #We activate the socket for listening
+    # We activate the socket for listening
     clientSocket.listen()
 
     # We wait for the result to come
@@ -175,7 +176,7 @@ def listenResult(nbNodes):
         data = None
 
         try:
-            workerSocket, address = clientSocket.accept() 
+            workerSocket, address = clientSocket.accept()
         except Exception as e:
             print("Error at accept in listening workers socket: " + str(e))
             continue
@@ -198,7 +199,7 @@ def listenResult(nbNodes):
         numberResultsReceived += 1
 
         if(numberResultsReceived == nbNodes):
-            result = round(partialResult,meanDecimals)
+            result = round(partialResult, meanDecimals)
 
             # We close both sockets letting connectServer socket to get out of the recv blocking call when all data is processed
             workerSocket.close()
@@ -211,8 +212,8 @@ def listenResult(nbNodes):
 
 print("Starting the client connection ...")
 
-#We capture SIGINT to end gracefully
-signal.signal(signal.SIGINT, signalHandler)  
+# We capture SIGINT to end gracefully
+signal.signal(signal.SIGINT, signalHandler)
 
 # We ask for the client port to be used
 clientPort = input("Input client port number:\n")
