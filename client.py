@@ -9,6 +9,7 @@ import sys
 import signal
 import os
 import json
+import logging
 
 # dataset = datasets.load_iris() #We'll work with the iris dataset --> we can change later if not suitable
 dataset = np.arange(100.0)
@@ -21,7 +22,9 @@ mutex = threading.Lock()
 
 
 def signalHandler(sig, frame):
-    print('Closing the client...')
+    msgInfo = 'Closing the client...'
+    print(msgInfo)
+    logging.info(msgInfo)
     sys.exit(0)
 
 
@@ -43,22 +46,32 @@ def main():
         msg = pickle.dumps(['Send', nbNodes])
         connectServer.send(msg)
     except Exception as e:
-        print("Error with socket connection to server: " + str(e))
+        msgInfo = "Error with socket connection to server: " + str(e)
+        if(printMode):
+            print(msgInfo)
+        logging.error(msgInfo)
         connectServer.close()
         sys.exit(0)
-
-    print('Asked for ' + str(nbNodes) + ' nodes')
+    msgInfo = 'Asked for ' + str(nbNodes) + ' nodes'
+    print(msgInfo)
+    logging.info(msgInfo)
 
     # We wait for the server to tell us how many workers it gives us and split the data accordingly
     try:
         nbNodesPickle = connectServer.recv(1024)
     except Exception as e:
-        print("Error receiving from server: " + str(e))
+        msgInfo = "Error receiving from server: " + str(e)
+        if(printMode):
+            print(msgInfo)
+        logging.error(msgInfo)
         connectServer.close()
         sys.exit(0)
 
     nbNodes = pickle.loads(nbNodesPickle)
-    print('Permission for ' + str(int(nbNodes)) + ' nodes')
+    msgInfo = 'Permission for ' + str(int(nbNodes)) + ' nodes'
+    print(msgInfo)
+    logging.info(msgInfo)
+
     datasets = splitDataset(int(nbNodes))  # list of split datasets
 
     # We initiate the thread listening for results.
@@ -128,20 +141,27 @@ def sendDataToWorker(df, workerIp, workerPort):
         workerSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         workerSocket.connect((workerIp, workerPort))
     except Exception as e:
-        print("Warning: connection not established with worker " +
-              str((workerPort)) + ' ' + str(e))
+        msgInfo = "Warning: connection not established with worker " + str((workerPort)) + ' ' + str(e)
+        if(printMode):
+            print(msgInfo)
+        logging.warning(msgInfo)
         workerSocket.close()
         return
 
     # Serialize the dataset with pickle
     df_pickled = pickle.dumps([clientPort, df])
 
-    print("Sending to worker: " + str(df))
+    msgInfo = "Sending to worker: " + str(df)
+    print(msgInfo)
+    logging.info(msgInfo)
     # send the serialized dataset with pickle
     try:
         workerSocket.send(df_pickled)
     except:
-        print("Error sending data to worker: " + str(e))
+        msgInfo = "Error sending data to worker: " + str(e)
+        if(printMode):
+            print(msgInfo)
+        logging.error(msgInfo)
 
     # close the connection with the worker
     workerSocket.close()
@@ -153,7 +173,10 @@ def splitDataset(nbNodes):
     try:
         splitDf = np.array_split(dataset, nbNodes)
     except:
-        print('Error splitting the data')
+        msgInfo = 'Error splitting the data'
+        if(printMode):
+            print(msgInfo)
+        logging.error(msgInfo)
     return splitDf
 
 
@@ -177,13 +200,19 @@ def listenResult(nbNodes):
         try:
             workerSocket, address = clientSocket.accept()
         except Exception as e:
-            print("Error at accept in listening workers socket: " + str(e))
+            msgInfo = "Error at accept in listening workers socket: " + str(e)
+            if(printMode):
+                print(msgInfo)
+            logging.error(msgInfo)
             continue
 
         try:
             data = workerSocket.recv(1024)
         except Exception as e:
-            print("Error at receiving partial results: " + str(e))
+            msgInfo = "Error at receiving partial results: " + str(e)
+            if(printMode):
+                print(msgInfo)
+            logging.error(msgInfo)
             workerSocket.close()
             continue
 
@@ -193,8 +222,9 @@ def listenResult(nbNodes):
             num, mean = data
             partialResult += mean * (num / len_dataset)
             mutex.acquire()
-            print("I received the result (" + str(data) + ") from data partition: " +
-                  str(workersJob[(address[0], workerPort)]))
+            msgInfo = "I received the result (" + str(data) + ") from data partition: " + str(workersJob[(address[0], workerPort)])
+            print(msgInfo)
+            logging.info(msgInfo)
             mutex.release()
             numberResultsReceived += 1
 
@@ -206,25 +236,35 @@ def listenResult(nbNodes):
                 clientSocket.close()
                 connectServer.shutdown(socket.SHUT_RDWR)
                 connectServer.close()
-                print("The result of the mean asked is: " + str(result))
+                msgInfo = "The result of the mean asked is: " + str(result)
+                print(msgInfo)
+                logging.info(msgInfo)
                 break
 
-
-print("Starting the client connection ...")
 
 # We capture SIGINT to end gracefully
 signal.signal(signal.SIGINT, signalHandler)
 
 # We ask for the client port to be used
 clientPort = input("Input client port number:\n")
+logging.basicConfig(filename='client' + clientPort + '.log', level=logging.DEBUG)
 clientPort = int(clientPort)
+
+msgInfo = "Starting the client connection..."
+logging.info(msgInfo)
+print(msgInfo)
 
 # We open listening socket on the client
 try:
     clientSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     clientSocket.bind((host, clientPort))
 except Exception as e:
-    print("Error with listening socket: " + str(e))
+
+    msgInfo = "Error with listening socket: " + str(e)
+    if(printMode):
+        print(msgInfo)
+    logging.error(msgInfo)
+
     sys.exit(1)
 
 main()

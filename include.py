@@ -18,5 +18,5 @@ DEAD_WORKERS = 1
 #Mean decimals returned
 meanDecimals = 10
 
-#If 1, it uses prints instead of logs
-debugMode = 0
+#If True, it uses prints instead of logs
+printMode = True

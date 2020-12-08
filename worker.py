@@ -7,6 +7,7 @@ from include import *
 import sys
 import os
 import statistics
+import logging
 
 host = HOST
 serverPort = SERVER_PORT_WORKERS
@@ -28,7 +29,10 @@ def msgServer(msg):
         dumpMsg = pickle.dumps([msg, workerPort])
         connectServer.send(dumpMsg)
     except Exception as e:
-        print("Error with connection socket with server: " + str(e))
+        msgInfo = "Error with connection socket with server: " + str(e)
+        if(printMode):
+            print(msgInfo)
+        logging.error(msgInfo)
         connectServer.close()
         return False
 
@@ -41,7 +45,10 @@ def handleDataFromClient():
         try:
             client, address = workerServer.accept()
         except Exception as e:
-            print("Error accepting client connection: " + str(e))
+            msgInfo = "Error accepting client connection: " + str(e)
+            if(printMode):
+                print(msgInfo)
+            logging.error(msgInfo)
             client.close()
             continue
 
@@ -59,7 +66,10 @@ def handleDataFromClient():
                     break
                 recv.append(packet)
             except Exception as e:
-                print("Error receiving data from client: " + str(e))
+                msgInfo = "Error receiving data from client: " + str(e)
+                if(printMode):
+                    print(msgInfo)
+                logging.error(msgInfo)
                 client.close()
                 os._exit(1)
         # We already received all the information from the client
@@ -67,11 +77,16 @@ def handleDataFromClient():
 
         clientPort, data = pickle.loads(b"".join(recv))
 
-        print("Received the following data: " + str(data))
+        msg = "Received the following data: " + str(data)
+        logging.info(msg)
+        print(msg)
 
         # We process the data received and send it back to the client
         result = processData(data)
-        print('Sending result: ' + str(result))
+
+        msg = 'Sending result: ' + str(result)
+        logging.info(msg)
+        print(msg)
         sendResult(address[0], clientPort, result)
 
         # We tell the server we are available from now on
@@ -85,7 +100,10 @@ def sendResult(addressIp, port, result):
         connectClient = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         connectClient.connect((addressIp, port))
     except Exception as e:
-        print("Error connection socket with client: " + str(e))
+        msgInfo = "Error connection socket with client: " + str(e)
+        if(printMode):
+            print(msgInfo)
+        logging.error(msgInfo)
         connectClient.close()
         return
 
@@ -94,7 +112,10 @@ def sendResult(addressIp, port, result):
         resultPickle = pickle.dumps([workerPort, result])
         connectClient.send(resultPickle)
     except Exception as e:
-        print("Error sending result to client: " + str(e))
+        msgInfo = "Error sending result to client: " + str(e)
+        if(printMode):
+            print(msgInfo)
+        logging.error(msgInfo)
 
 
 def meanData(ary):
@@ -115,6 +136,7 @@ def processData(data):
 
 # Creating a worker port to listen to client
 workerPort = input("Introduce worker port number:\n")
+logging.basicConfig(filename='client' + workerPort + '.log', level=logging.DEBUG)
 workerPort = int(workerPort)
 
 try:
@@ -122,7 +144,10 @@ try:
     workerServer.bind((host, workerPort))
     workerServer.listen()
 except Exception as e:
-    print("Error connection socket to listen to the client: " + str(e))
+    msgInfo = "Error connection socket to listen to the client: " + str(e)
+    if(printMode):
+        print(msgInfo)
+    logging.error(msgInfo)
     workerServer.close()
     sys.exit(1)
 

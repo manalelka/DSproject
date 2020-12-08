@@ -7,6 +7,8 @@ import sys
 import os
 import json
 from include import *
+import logging
+logging.basicConfig(filename='server.log', level=logging.DEBUG)
 
 availableWorkers = []  # list of addresses of the available workers
 notReadyWorkers = []  # list of addresses of the not available workers
@@ -19,11 +21,10 @@ mutexNotAvailable = threading.Lock()
 mutexAvailable = threading.Lock()
 host = HOST
 
-
-
-
 def signalHandler(sig, frame):
-    print('Closing the server...')
+    msgInfo = 'Closing the server...'
+    print(msgInfo)
+    logging.info(msgInfo)
     sys.exit(0)
 
 
@@ -38,7 +39,9 @@ def moveToNotAvailable(address):
             del availableWorkers[i]
         except:
             pass
-        print("Worker at: " + str(address) + ' is not available')
+        msgInfo = "Worker at: " + str(address) + ' is not available'
+        print(msgInfo)
+        logging.info(msgInfo)
         notReadyWorkers.append(address)
     mutexNotAvailable.release()
 
@@ -54,7 +57,9 @@ def moveToAvailable(address):
             del notReadyWorkers[i]
         except:
             pass
-        print("Worker at: " + str(address) + ' is ready')
+        msgInfo = "Worker at: " + str(address) + ' is ready'
+        print(msgInfo)
+        logging.info(msgInfo)
         availableWorkers.append(address)
     mutexAvailable.release()
 
@@ -66,7 +71,10 @@ def listenWorkers():
         workersSocket.bind((host, SERVER_PORT_WORKERS))
         workersSocket.listen()
     except Exception as e:
-        print("Error with listening socket to workers: " + str(e))
+        msgInfo = "Error with listening socket to workers: " + str(e)
+        if(printMode):
+            print(msgInfo)
+        logging.error(msgInfo)
         sys.exit(0)
 
     while True:
@@ -76,7 +84,11 @@ def listenWorkers():
         try:
             msg = worker.recv(1024)
         except Exception as e:
-            print('Error receiving message from worker: ' + str(e))
+            msgInfo = 'Error receiving message from worker: ' + str(e)
+            if(printMode):
+                print(msgInfo)
+            logging.error(msgInfo)
+
             worker.close()
             continue
 
@@ -135,11 +147,17 @@ def sendWorkers():
                     mutexJobs.acquire()
                     jobs.pop(client, None)
                     mutexJobs.release()
-                    print('Warning: error sending to client: ' + str(e))
+                    msgInfo = 'Warning: error sending to client: ' + str(e)
+                    if(printMode):
+                        print(msgInfo)
+                    logging.warning(msgInfo)
                     continue
 
                 except Exception as exce:
-                    print('Error new workers to client: ' + str(exce))
+                    msgInfo = 'Error new workers to client: ' + str(exce)
+                    if(printMode):
+                        print(msgInfo)
+                    logging.error(msgInfo)
                     continue
 
 
@@ -168,26 +186,37 @@ def listenClients():
         clientSocket.bind((host, SERVER_PORT_CLIENTS))
         clientSocket.listen()
     except Exception as e:
-        print("Error with connection socket with client: " + str(e))
+        msgInfo = "Error with connection socket with client: " + str(e)
+        if(printMode):
+            print(msgInfo)
+        logging.error(msgInfo)
         os._exit(1)
 
     while True:
         try:
             client, address = clientSocket.accept()
         except Exception as e:
-            print("Error connecting with client: " + str(e))
+            msgInfo = "Error connecting with client: " + str(e)
+            if(printMode):
+                print(msgInfo)
+            logging.error(msgInfo)
             continue
 
         try:
             # We receive from the client how many workers it wants
             data = client.recv(1024)
         except Exception as e:
-            print("Error receiving from client: " + str(e))
+            msgInfo = "Error receiving from client: " + str(e)
+            if(printMode):
+                print(msgInfo)
+            logging.error(msgInfo)
             client.close()
             continue
 
         dum, wantedNodes = pickle.loads(data)
-        print('Client wants ' + str(wantedNodes) + ' workers.')
+        msgInfo = 'Client wants ' + str(wantedNodes) + ' workers.'
+        print(msgInfo)
+        logging.info(msgInfo)
 
         # We decide how many workers we give the client and tell the client
         numberWorkers = min(wantedNodes, MAX_WORKERS)
@@ -196,7 +225,10 @@ def listenClients():
         try:
             client.send(numberWorkersSerialized)
         except Exception as e:
-            print("Error sending number of workers to client: " + str(e))
+            msgInfo = "Error sending number of workers to client: " + str(e)
+            if(printMode):
+                print(msgInfo)
+            logging.error(msgInfo)            
             client.close()
             continue
 
@@ -204,7 +236,9 @@ def listenClients():
         workersLeftToSend[client] = numberWorkers
         mutex.release()
 
-        print('Sent number of workers: ' + str(numberWorkers))
+        msgInfo = 'Sent number of workers: ' + str(numberWorkers)
+        print(msgInfo)
+        logging.info(msgInfo)
 
         # We check if there are free workers for the client
         sendWorkers()
@@ -248,7 +282,10 @@ def checkJobs():
                     mutexJobs.release()
                     continue
                 except Exception as exce:
-                    print("Error sending dead workers to client: " + str(e))
+                    msgInfo = "Error sending dead workers to client: " + str(e)
+                    if(printMode):
+                        print(msgInfo)
+                    logging.error(msgInfo)
                     continue
 
                 clientWorkers = list(set(clientWorkers) - set(deadWorkers))
@@ -298,8 +335,11 @@ def startServer():
         target=checkWorkers)  # check if workers are dead
     threadCheckWorkers.start()
 
-    print("Server started")
+    msgInfo = "Server started"
+    print(msgInfo)
+    logging.info(msgInfo)
 
-
-print('Server is starting')
+msgInfo = 'Server is starting'
+print(msgInfo)
+logging.info(msgInfo)
 startServer()
