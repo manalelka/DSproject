@@ -5,14 +5,18 @@ import pickle
 import signal
 import sys
 import os
+import json
 from include import *
 
 availableWorkers = [] #list of addresses of the available workers
 notReadyWorkers = [] #list of addresses of the not available workers
-workersLeftToSend = [] #list of tuples [client, nLEumberWorkers], numberWorkers is the number of workers the client still needs
+workersLeftToSend = [] #list of tuples [client, numberWorkers], numberWorkers is the number of workers the client still needs
 tsWorkers = {} #dictionary with workerAddress: ts, ts the timestamp of the last interaction we had with the worker
 jobs = {} #dictionary with client: workers, workers processing the client petition at the moment
 mutex = threading.Lock()
+mutexJobs = threading.Lock()
+mutexNotAvailable = threading.Lock()
+mutexAvailable = threading.Lock()
 host = HOST
 
 def signalHandler(sig, frame):
@@ -20,8 +24,10 @@ def signalHandler(sig, frame):
     sys.exit(0)
 
 def moveToNotAvailable(address):
+    global mutexNotAvailable
     #Check if it was already between the available workers, delete it if so, and
     # append it to not ready ones
+    mutexNotAvailable.acquire()
     if address not in notReadyWorkers:
         try:
             i = availableWorkers.index(address)
@@ -30,10 +36,13 @@ def moveToNotAvailable(address):
             pass
         print("Worker at: " + str(address) + ' is not available')
         notReadyWorkers.append(address)
+    mutexNotAvailable.release()
 
 def moveToAvailable(address):
+    global mutex
     #Check if it was already between not ready workers, delete it if so, and
     # append it to available ones
+    mutexAvailable.acquire()
     if address not in availableWorkers:
         try:
             i = notReadyWorkers.index(address)
@@ -42,6 +51,7 @@ def moveToAvailable(address):
             pass
         print("Worker at: " + str(address) + ' is ready')
         availableWorkers.append(address)
+    mutexAvailable.release()
 
 def listenWorkers():
     #Create socket to listen to workers
@@ -62,7 +72,7 @@ def listenWorkers():
         except Exception as e:
             print('Error receiving message from worker: ' + str(e))
             worker.close()
-            break
+            continue
 
         msg = pickle.loads(msg)
         if msg[0] == 'PING':
@@ -89,6 +99,7 @@ def sendWorkers():
         client = job[0]
         wantedWorkers = job[1]
         l = len(availableWorkers)
+        workersToSend = []
 
         if l > 0:
             #If we have more than the needed workers we assign those to the client and continue
@@ -106,16 +117,33 @@ def sendWorkers():
             for addr in workersToSend:
                 moveToNotAvailable(addr)
 
-            if len(workersToSend) > 0:
-                msg =  pickle.dumps([NEW_WORKERS,workersToSend])
+            length = len(workersToSend)
+
+            if length > 0:
+
+                msg =  json.dumps([NEW_WORKERS,workersToSend])
                 try:
-                    client.send(msg) #TODO error closed ?
-                except Exception as e:
+                    client.send(bytes(msg,encoding="utf-8"))
+                
+                except socket.error as e:
+                    if job in workersLeftToSend:
+                        workersLeftToSend.remove(job)
+                    mutexJobs.acquire()
+                    jobs.pop(client,None)
+                    mutexJobs.release()
+                    print('Error sending to client: ' + str(e))
+                    continue
+                
+                except Exception as exce:
                     print('Error new workers to client: ' + str(e))
+                    continue
+
+                mutexJobs.acquire()
                 if client in jobs:
                     jobs[client] += workersToSend
                 else:
                     jobs[client] = workersToSend
+                mutexJobs.release()
 
         else:
             noMoreWorkers = True
@@ -139,7 +167,6 @@ def listenClients():
             client, address = clientSocket.accept()
         except Exception as e:
             print("Error connecting with client: " + str(e))
-            client.close()
             continue
 
         try:
@@ -155,9 +182,6 @@ def listenClients():
 
         #We decide how many workers we give the client and tell the client
         numberWorkers = min(wantedNodes, MAX_WORKERS)
-        mutex.acquire()
-        workersLeftToSend.append([client,numberWorkers])
-        mutex.release()
         numberWorkersSerialized = pickle.dumps(numberWorkers)
 
         try:
@@ -166,6 +190,10 @@ def listenClients():
             print("Error sending number of workers to client: " + str(e))
             client.close()
             continue
+
+        mutex.acquire()
+        workersLeftToSend.append([client,numberWorkers])
+        mutex.release()
 
         print('Sent number of workers: ' + str(numberWorkers))
 
@@ -178,12 +206,13 @@ def listenClients():
 
 def checkJobs():
     global workersLeftToSend
+    global mutex
     #Check the workers in a job are still alive and working
     while True:
-        for client in jobs.keys():
+        for client in set(jobs.keys()):
             deadWorkers = []
             clientWorkers = jobs[client]
-            for addr in clientWorkers:
+            for addr in set(clientWorkers):
                 try:
                     #If it's been inactive for too long we declare it dead
                     i = notReadyWorkers.index(addr)
@@ -191,19 +220,32 @@ def checkJobs():
                         deadWorkers.append(addr)
                 except:
                     pass
+
             lenDeathWorkers = len(deadWorkers)
             #If there are dead workers we search for new workers to substitute the dead
             if lenDeathWorkers > 0:
-                msg =  pickle.dumps([DEAD_WORKERS,deadWorkers])
+                msg =  json.dumps([DEAD_WORKERS,deadWorkers])
 
                 try:
-                    client.send(msg)
-                except Exception as e:
-                    print("Error sending dead workers to client: " + str(e)) #TODO maybe try again?
+                    client.send(bytes(msg,encoding="utf-8"))
+
+                except socket.error as e:
+                    mutex.acquire()
+                    if [client,len(jobs[client])] in workersLeftToSend:
+                        workersLeftToSend.remove([client,len(jobs[client])])
+                    mutex.release()
+                    mutexJobs.acquire()
+                    jobs.pop(client,None)
+                    mutexJobs.release()
+                    continue
+                except Exception as exce:
+                    print("Error sending dead workers to client: " + str(e))
+                    continue
 
                 clientWorkers = list(set(clientWorkers) - set(deadWorkers))
+                mutexJobs.acquire()
                 jobs[client] = clientWorkers
-
+                mutexJobs.release()
                 #We update the new number of needed workers by the client
                 mutex.acquire()
                 try:

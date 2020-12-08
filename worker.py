@@ -59,11 +59,10 @@ def handleDataFromClient():
             except Exception as e:
                 print("Error receiving data from client: " + str(e))
                 client.close()
-                sys.exit(0)
-                #TODO kill completely or tell server im up again
-                #We tell the server we are ready again
-                if not msgServer("Yes"):
-                    sys.exit(0)
+                os._exit(1)
+        #We already received all the information from the client
+        client.close()
+
         clientPort,data = pickle.loads(b"".join(recv))
 
 
@@ -77,7 +76,7 @@ def handleDataFromClient():
 
         #We tell the server we are available from now on
         if not msgServer("Yes"):
-            sys.exit(0)
+            os._exit(1)
 
 
 def sendResult(addressIp,port,result):
@@ -96,15 +95,18 @@ def sendResult(addressIp,port,result):
         connectClient.send(resultPickle)
     except Exception as e:
         print("Error sending result to client: " + str(e))
-    finally:
-        connectClient.close()
 
+def meanData(ary):
+    avg = 0;
+    t = 1
+    for x in ary:
+        avg += (x - avg) / t
+        t += 1
+    return avg
 
 def processData(data):
-    #if type(data) == int or type(data) == float or type(data) == np.float64:
-    #    return [1, data]
-    result = statistics.mean(data)
-    #time.sleep(5)
+    result = meanData(data)
+    #time.sleep(1)
     return [len(data), result]
 
 #Creating a worker port to listen to client
@@ -123,7 +125,8 @@ except Exception as e:
 #We tell the server we are ready
 if not msgServer("Yes"):
     workerServer.close()
-    sys.exit(1)
+    sys.exit(1)  
+
 
 #We ping the server from time to time so that it knows we are alive
 pingThread = threading.Thread(target = pingServer)

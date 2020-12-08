@@ -14,3 +14,6 @@ PING_SLEEP = 1
 # flags for messages between client and server
 NEW_WORKERS = 0
 DEAD_WORKERS = 1
+
+#Mean decimals returned
+meanDecimals = 10

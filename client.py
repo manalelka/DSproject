@@ -6,11 +6,12 @@ import threading
 from sklearn import datasets
 from include import *
 import sys
+import signal
 import os
-
+import json
 
 # dataset = datasets.load_iris() #We'll work with the iris dataset --> we can change later if not suitable
-dataset = np.arange(9.0)
+dataset = np.arange(100.0)
 len_dataset = len(dataset)
 host = HOST
 serverPort = SERVER_PORT_CLIENTS
@@ -18,8 +19,11 @@ workersJob = {}  # dictionary with the workers and the part of the dataset they 
 jobsToGetDone = None
 mutex = threading.Lock()
 
+def signalHandler(sig, frame):
+    print('Closing the client...')
+    sys.exit(0)
 
-def startConnectionToServer():
+def main():
     # Connecting to server port
     global connectServer
     global result
@@ -64,39 +68,59 @@ def startConnectionToServer():
 
     while(result == None):  # while we dont have a result
         data = []
+
         try:
             data = connectServer.recv(1024)
-        except:
+        except Exception as e:
             # This is in case the socket is closed
+            print(e)
             pass
 
+
         if(result == None and len(data) != 0):
-            # @ ips and ports of working nodes sent by the server
-            flag, addrs = pickle.loads(data)
 
-            if flag == NEW_WORKERS:  # We send data to these new workers
-                for i in range(len(addrs)):
-                    workerIp = addrs[i][0]
-                    workerPort = addrs[i][1]
 
-                    jobNumber = jobsToGetDone.pop()
-                    sendDataToWorker(datasets[jobNumber], workerIp, workerPort)
+            data = data.decode("utf-8")
+            jsons = data.split("][")   
 
-                    # We add to workersJob what job is this worker going to do
-                    mutex.acquire()
-                    workersJob[(workerIp, workerPort)] = jobNumber
-                    mutex.release()
+            if(len(jsons) > 1): 
+                jsons[0] += "]"
+                for item in range(1,len(jsons)-1):
+                    item = "[" + item + "]"
+                jsons[len(jsons)-1] = "[" + jsons[len(jsons)-1]
 
-            elif flag == DEAD_WORKERS:  # These workers are dead
-                for i in range(len(addrs)):
-                    workerIp = addrs[i][0]
-                    workerPort = addrs[i][1]
 
-                    # Recover what data needs to be computed again because its worker died
-                    mutex.acquire()
-                    jobNumber = workersJob[(workerIp, workerPort)]
-                    mutex.release()
-                    jobsToGetDone.append(jobNumber)
+            for data in jsons:
+                data = json.loads(data)
+                # @ ips and ports of working nodes sent by the server
+                flag, addrs = data
+
+                if flag == NEW_WORKERS:  # We send data to these new workers
+                    for i in range(len(addrs)):
+                        workerIp = addrs[i][0]
+                        workerPort = addrs[i][1]
+
+                        jobNumber = jobsToGetDone.pop()
+                        sendDataToWorker(datasets[jobNumber], workerIp, workerPort)
+
+                        # We add to workersJob what job is this worker going to do
+                        mutex.acquire()
+                        workersJob[(workerIp, workerPort)] = jobNumber
+                        mutex.release()
+
+                elif flag == DEAD_WORKERS:  # These workers are dead
+                    for i in range(len(addrs)):
+                        workerIp = addrs[i][0]
+                        workerPort = addrs[i][1]
+
+                        # Recover what data needs to be computed again because its worker died
+                        mutex.acquire()
+                        jobNumber = workersJob[(workerIp, workerPort)]
+                        mutex.release()
+                        jobsToGetDone.append(jobNumber)
+
+    #We have received the result so we close the program
+    sys.exit(0)
 
 
 def sendDataToWorker(df, workerIp, workerPort):
@@ -105,10 +129,9 @@ def sendDataToWorker(df, workerIp, workerPort):
         workerSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         workerSocket.connect((workerIp, workerPort))
     except Exception as e:
-        print("Error with the connection to worker " + str((workerPort)) + str(e))
+        print("Warning: connection not established with worker " + str((workerPort)) + ' ' + str(e))
         workerSocket.close()
-        sys.exit(1)
-        # TODO : should we notify the server or send the data subset to another worker ?
+        return
 
     # Serialize the dataset with pickle
     df_pickled = pickle.dumps([clientPort, df])
@@ -119,7 +142,6 @@ def sendDataToWorker(df, workerIp, workerPort):
         workerSocket.send(df_pickled)
     except:
         print("Error sending data to worker: " + str(e))
-        # TODO : should we notify the server or send the data subset to another worker ?
 
     # close the connection with the worker
     workerSocket.close()
@@ -140,29 +162,30 @@ def listenResult(nbNodes):
     global result
     global clientPort
     global mutex
+    global clientSocket
 
-    # We open listening socket on the client
-    try:
-        clientSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        clientSocket.bind((host, clientPort))
-        clientSocket.listen()
-    except Exception as e:
-        print("Error with listening socket: " + str(e))
-        clientSocket.close()
-        os._exit(1)
+    #We activate the socket for listening
+    clientSocket.listen()
 
     # We wait for the result to come
     partialResult = 0
     numberResultsReceived = 0
     while True:
+
+        data = None
+
         try:
-            workerSocket, address = clientSocket.accept()  # TODO not sure try except
+            workerSocket, address = clientSocket.accept() 
+        except Exception as e:
+            print("Error at accept in listening workers socket: " + str(e))
+            continue
+
+        try:
             data = workerSocket.recv(1024)
         except Exception as e:
-            print("Error with worker socket: " + str(e))
-            clientSocket.close()
-            #workerSocket.close()
-            break
+            print("Error at receiving partial results: " + str(e))
+            workerSocket.close()
+            continue
 
         workerPort, data = pickle.loads(data)
 
@@ -175,7 +198,7 @@ def listenResult(nbNodes):
         numberResultsReceived += 1
 
         if(numberResultsReceived == nbNodes):
-            result = partialResult
+            result = round(partialResult,meanDecimals)
 
             # We close both sockets letting connectServer socket to get out of the recv blocking call when all data is processed
             workerSocket.close()
@@ -188,8 +211,19 @@ def listenResult(nbNodes):
 
 print("Starting the client connection ...")
 
+#We capture SIGINT to end gracefully
+signal.signal(signal.SIGINT, signalHandler)  
+
 # We ask for the client port to be used
 clientPort = input("Input client port number:\n")
 clientPort = int(clientPort)
 
-startConnectionToServer()
+# We open listening socket on the client
+try:
+    clientSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    clientSocket.bind((host, clientPort))
+except Exception as e:
+    print("Error with listening socket: " + str(e))
+    sys.exit(1)
+
+main()
