@@ -9,7 +9,6 @@ import os
 import json
 import logging
 
-# dataset = datasets.load_iris() #We'll work with the iris dataset --> we can change later if not suitable
 dataset = np.arange(100.0)
 len_dataset = len(dataset)
 host = HOST
@@ -17,22 +16,6 @@ serverPort = SERVER_PORT_CLIENTS
 workersJob = {}  # dictionary with the workers and the part of the dataset they are working on
 jobsToGetDone = None
 mutex = threading.Lock() # mutex to protect workersJob
-
-
-def signalHandler(sig, frame):
-    """
-        Name: signalHandler
-        Description: Function to handle SIGINT and end the program  gracefully.
-        Arguments:
-            -sig: signal number.
-            -frame: current stack frame.
-        Return: None
-    """
-    msgInfo = 'Closing the client...'
-    print(msgInfo)
-    logging.info(msgInfo)
-    sys.exit(0)
-
 
 def main():
     """
@@ -87,20 +70,28 @@ def main():
 
     datasets = splitDataset(int(nbNodes))  # list of split datasets
 
-    # We initiate the thread listening for results.
-    listenThread = threading.Thread(target=listenResult, args=(nbNodes,))
-    listenThread.start()
+    try:
+        # We initiate the thread listening for results.
+        listenThread = threading.Thread(target=listenResult, args=(nbNodes,))
+        listenThread.start()
+    except(KeyboardInterrupt, SystemExit):
+        #In case the client hungs, to kill it with SIGINT
+        sys.exit(1)
 
     # List of numbers of jobs left to be done in inverse order to pop them in order
     jobsToGetDone = list(range(int(nbNodes)-1, -1, -1))
 
+
     while(result == None):  # while we dont have a result
         data = []
+
+        #Timeout of 1 second to the server connection socket
+        connectServer.settimeout(1)
 
         try:
             data = connectServer.recv(1024)
         except Exception as e:
-            # This is in case the socket is closed
+            # This is in case the socket is closed from the server side
             pass
 
         if(result == None and len(data) != 0):
@@ -284,16 +275,12 @@ def listenResult(nbNodes):
                 # of the recv blocking call when all data is processed
                 workerSocket.close()
                 clientSocket.close()
-                connectServer.shutdown(socket.SHUT_RDWR)
                 connectServer.close()
                 msgInfo = "The result of the mean asked is: " + str(result)
                 print(msgInfo)
                 logging.info(msgInfo)
                 break
 
-
-# We capture SIGINT to end gracefully
-signal.signal(signal.SIGINT, signalHandler)
 
 # We ask for the client port to be used
 clientPort = input("Input client port number:\n")
