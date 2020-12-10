@@ -6,7 +6,6 @@ import numpy as np
 from include import *
 import sys
 import os
-import statistics
 import logging
 
 host = HOST
@@ -14,6 +13,12 @@ serverPort = SERVER_PORT_WORKERS
 
 
 def pingServer():
+    """
+        Name: pingServer
+        Description: Function to ping the server periodically.
+        Arguments: None.
+        Return: None.
+    """
     while True:
         if msgServer("PING"):
             time.sleep(PING_SLEEP)
@@ -22,6 +27,13 @@ def pingServer():
 
 
 def msgServer(msg):
+    """
+        Name: msgServer
+        Description: Function to send a message to the server.
+        Arguments:
+            -msg: message to send.
+        Return: False if anything goes wrong, else True.
+    """
     # Connecting to server port and sending a message
     try:
         connectServer = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -41,6 +53,12 @@ def msgServer(msg):
 
 
 def handleDataFromClient():
+    """
+        Name: handleDataFromClient
+        Description: Function to handle data received from a client.
+        Arguments: None.
+        Return: None.
+    """
     while True:
         try:
             client, address = workerServer.accept()
@@ -52,7 +70,7 @@ def handleDataFromClient():
             client.close()
             continue
 
-        # We tell the server we are not ready
+        # We tell the server we are not available for other works
         if not msgServer("No"):
             client.close()
             os._exit(1)
@@ -95,7 +113,16 @@ def handleDataFromClient():
 
 
 def sendResult(addressIp, port, result):
-    # We connect to the server to send back the result
+    """
+        Name: sendResult
+        Description: Function to send the partial result to the client.
+        Arguments:
+            -addressIp: string address IP of the client.
+            -port: integer port of the client.
+            -result: result of the partial computation.
+        Return: None.
+    """
+    # We connect to the server
     try:
         connectClient = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         connectClient.connect((addressIp, port))
@@ -119,6 +146,13 @@ def sendResult(addressIp, port, result):
 
 
 def meanData(ary):
+    """
+        Name: meanData
+        Description: Function that computes the mean of an array of numbers.
+        Arguments:
+            -ary: array of numbers to calculate its mean.
+        Return: Mean of the data.
+    """
     avg = 0
     t = 1
     for x in ary:
@@ -128,6 +162,15 @@ def meanData(ary):
 
 
 def processData(data):
+    """
+        Name: processData
+        Description: Function that processes the data imputed. In this case,
+            it calculates its average.
+        Arguments:
+            -data: data to process.
+        Return: list with the length of the data received and the result of the
+            computation.
+    """
     result = meanData(data)
     #In case you want to kill workers and see the fault tolerance
     #time.sleep(1)
@@ -139,6 +182,7 @@ workerPort = input("Introduce worker port number:\n")
 logging.basicConfig(filename='client' + workerPort + '.log', level=logging.DEBUG)
 workerPort = int(workerPort)
 
+# We create the socket to listen to the server
 try:
     workerServer = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     workerServer.bind((host, workerPort))
