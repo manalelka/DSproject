@@ -19,16 +19,12 @@ workersJob = {}  # dictionary with the workers and the part of the dataset they 
 jobsToGetDone = None
 mutex = threading.Lock()
 
-def signalHandler(sig, frame):
-    print('Closing the client...')
-
 def evaluate(nodes,size):
     # Connecting to server port
     global connectServer
     global result
     global mutex
     result = None
-
 
     # We ask the client how many workers he would want
     nbNodes = nodes
@@ -71,27 +67,26 @@ def evaluate(nodes,size):
 
     while(result == None):  # while we dont have a result
         data = []
-        connectServer.settimeout(1)
 
         try:
+            connectServer.settimeout(1)
             data = connectServer.recv(1024)
         except Exception as e:
             # This is in case the socket is closed
-            #print(e)
+            #connectServer.close()
             pass
 
         if(result == None and len(data) != 0):
 
-
+            # We parse the json data in case more than one json is sent together
             data = data.decode("utf-8")
             jsons = data.split("][")
 
             if(len(jsons) > 1):
                 jsons[0] += "]"
-                for item in range(1,len(jsons)-1):
-                    item = "[" + str(item) + "]"
+                for i in range(1, len(jsons)-1):
+                    jsons[i] = "[" + jsons[i] + "]"
                 jsons[len(jsons)-1] = "[" + jsons[len(jsons)-1]
-
 
             for data in jsons:
                 data = json.loads(data)
@@ -104,12 +99,13 @@ def evaluate(nodes,size):
                         workerPort = addrs[i][1]
 
                         jobNumber = jobsToGetDone.pop()
-                        sendDataToWorker(datasets[jobNumber], workerIp, workerPort)
 
                         # We add to workersJob what job is this worker going to do
                         mutex.acquire()
                         workersJob[(workerIp, workerPort)] = jobNumber
                         mutex.release()
+
+                        sendDataToWorker(datasets[jobNumber], workerIp, workerPort)
 
                 elif flag == DEAD_WORKERS:  # These workers are dead
                     for i in range(len(addrs)):
@@ -208,8 +204,11 @@ def listenResult(nbNodes):
             # We close both sockets letting connectServer socket to get out of the recv blocking call when all data is processed
             workerSocket.close()
             #clientSocket.close()
-            #connectServer.shutdown(socket.SHUT_RDWR)
-            connectServer.close()
+            try:
+                connectServer.shutdown(socket.SHUT_RDWR)
+            except:
+                pass
+            #connectServer.close()
             print("The result of the mean asked is: " + str(result))
             break
 
@@ -237,7 +236,7 @@ except Exception as e:
 # Change the size variable below to test for array of size (10**1 - 10**size) of the dataset
 
 
-numberOfWorkers = 7
+numberOfWorkers = 10
 wb = openpyxl.load_workbook('LoggingData.xlsx')
 columns = ['A','B','C','D','E','F','G','H','I','J']
 len_dataset = 0
