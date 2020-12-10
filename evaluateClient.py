@@ -59,14 +59,19 @@ def evaluate(nodes,size):
     datasets = splitDataset(int(nbNodes),size)  # list of split datasets
 
     # We initiate the thread listening for results.
-    listenThread = threading.Thread(target=listenResult, args=(nbNodes,))
-    listenThread.start()
+    try:
+        listenThread = threading.Thread(target=listenResult, args=(nbNodes,))
+        listenThread.start()
+    except(KeyboardInterrupt, SystemExit):
+        sys.exit(1)
+
 
     # List of numbers of jobs left to be done in inverse order to pop them in order
     jobsToGetDone = list(range(int(nbNodes)-1, -1, -1))
 
     while(result == None):  # while we dont have a result
         data = []
+        connectServer.settimeout(1)
 
         try:
             data = connectServer.recv(1024)
@@ -74,7 +79,6 @@ def evaluate(nodes,size):
             # This is in case the socket is closed
             #print(e)
             pass
-
 
         if(result == None and len(data) != 0):
 
@@ -85,7 +89,7 @@ def evaluate(nodes,size):
             if(len(jsons) > 1):
                 jsons[0] += "]"
                 for item in range(1,len(jsons)-1):
-                    item = "[" + item + "]"
+                    item = "[" + str(item) + "]"
                 jsons[len(jsons)-1] = "[" + jsons[len(jsons)-1]
 
 
@@ -213,7 +217,7 @@ def listenResult(nbNodes):
 print("Starting the client connection ...")
 
 #We capture SIGINT to end gracefully
-signal.signal(signal.SIGINT, signalHandler)
+#signal.signal(signal.SIGINT, signalHandler)
 
 clientPort = input("Input client port number:\n")
 clientPort = int(clientPort)
@@ -233,17 +237,17 @@ except Exception as e:
 # Change the size variable below to test for array of size (10**1 - 10**size) of the dataset
 
 
-numberOfWorkers = 10
+numberOfWorkers = 7
 wb = openpyxl.load_workbook('LoggingData.xlsx')
 columns = ['A','B','C','D','E','F','G','H','I','J']
 len_dataset = 0
 
-sheet = wb.get_sheet_by_name('Sheet1')
+sheet = wb['Sheet1']
 totalRuns = 1
 
 #Logging into excel sheet called LoggingData.xlsx
 for size in range (1,8):
-    print(size)
+    print("Size: " + str(size))
     len_dataset = 10**size
     for i in range(numberOfWorkers):
         totalTimeTaken = 0
@@ -252,7 +256,7 @@ for size in range (1,8):
             evaluate(i+1,size)
             end = time.time() - start
             totalTimeTaken += end
-            time.sleep(1)
+            #time.sleep(1)
         sheet[columns[i]+str(size)] = totalTimeTaken/totalRuns
 
 
