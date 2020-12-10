@@ -4,7 +4,6 @@ import numpy as np
 import threading
 from include import *
 import sys
-import signal
 import os
 import json
 import logging
