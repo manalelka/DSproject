@@ -101,8 +101,8 @@ def main():
 
             if(len(jsons) > 1):
                 jsons[0] += "]"
-                for item in range(1, len(jsons)-1):
-                    item = "[" + item + "]"
+                for i in range(1, len(jsons)-1):
+                    jsons[i] = "[" + jsons[i] + "]"
                 jsons[len(jsons)-1] = "[" + jsons[len(jsons)-1]
 
             # We get the data from each json
