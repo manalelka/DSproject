@@ -1,9 +1,7 @@
-import pandas as pd
 import socket
 import pickle
 import numpy as np
 import threading
-from sklearn import datasets
 from include import *
 import sys
 import signal
@@ -18,10 +16,18 @@ host = HOST
 serverPort = SERVER_PORT_CLIENTS
 workersJob = {}  # dictionary with the workers and the part of the dataset they are working on
 jobsToGetDone = None
-mutex = threading.Lock()
+mutex = threading.Lock() # mutex to protect workersJob
 
 
 def signalHandler(sig, frame):
+    """
+        Name: signalHandler
+        Description: Function to handle SIGINT and end the program  gracefully.
+        Arguments:
+            -sig: signal number.
+            -frame: current stack frame.
+        Return: None
+    """
     msgInfo = 'Closing the client...'
     print(msgInfo)
     logging.info(msgInfo)
@@ -29,7 +35,12 @@ def signalHandler(sig, frame):
 
 
 def main():
-    # Connecting to server port
+    """
+        Name: main
+        Description: main function of the client.
+        Arguments: None.
+        Return: None.
+    """
     global connectServer
     global result
     global mutex
@@ -39,6 +50,7 @@ def main():
     nbNodes = input("How many nodes do you want?:\n")
     nbNodes = int(nbNodes)
 
+    # Connecting to server port
     try:
         connectServer = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         connectServer.connect((host, serverPort))
@@ -56,7 +68,8 @@ def main():
     print(msgInfo)
     logging.info(msgInfo)
 
-    # We wait for the server to tell us how many workers it gives us and split the data accordingly
+    # We wait for the server to tell us how many workers it gives us and split
+    # the data accordingly
     try:
         nbNodesPickle = connectServer.recv(1024)
     except Exception as e:
@@ -92,6 +105,7 @@ def main():
 
         if(result == None and len(data) != 0):
 
+            # We parse the json data in case more than one json is sent together
             data = data.decode("utf-8")
             jsons = data.split("][")
 
@@ -101,9 +115,10 @@ def main():
                     item = "[" + item + "]"
                 jsons[len(jsons)-1] = "[" + jsons[len(jsons)-1]
 
+            # We get the data from each json
             for data in jsons:
                 data = json.loads(data)
-                # @ ips and ports of working nodes sent by the server
+                # @ ips and ports of working/dead nodes sent by the server
                 flag, addrs = data
 
                 if flag == NEW_WORKERS:  # We send data to these new workers
@@ -136,6 +151,15 @@ def main():
 
 
 def sendDataToWorker(df, workerIp, workerPort):
+    """
+        Name: sendDataToWorker
+        Description: Function to send the data to the worker we want.
+        Arguments:
+            -df: data we want to send.
+            -workerIp: string, worker IP we want to connect to.
+            -workerPort: int, worker port we want to connect to.
+        Return: None
+    """
     # Connect to the worker node
     try:
         workerSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -154,6 +178,7 @@ def sendDataToWorker(df, workerIp, workerPort):
     msgInfo = "Sending to worker: " + str(df)
     print(msgInfo)
     logging.info(msgInfo)
+
     # send the serialized dataset with pickle
     try:
         workerSocket.send(df_pickled)
@@ -168,8 +193,18 @@ def sendDataToWorker(df, workerIp, workerPort):
 
 
 def splitDataset(nbNodes):
+    """
+        Name: splitDataset
+        Description: Function that divides a dataset depending on the number of
+            we are going to get from the server.
+        Arguments:
+            -nbNodes: number of nodes we will get from the server (number of
+                parts in which the dataset will be divided).
+            -workerIp: string, worker IP we want to connect to.
+            -workerPort: int, worker port we want to connect to.
+        Return: list of the datasets.
+    """
     # split the dataset depending on how many working nodes we have
-    # output : list of the datasets
     try:
         splitDf = np.array_split(dataset, nbNodes)
     except:
@@ -181,11 +216,20 @@ def splitDataset(nbNodes):
 
 
 def listenResult(nbNodes):
+    """
+        Name: listenResult
+        Description: Function that starts a listening socket to receive the
+            result from the workers.
+        Arguments:
+            -nbNodes: number of nodes we will get from the server (number of
+                workers we will receive a result from).
+        Return: None.
+    """
     global connectServer
-    global result
-    global clientPort
-    global mutex
     global clientSocket
+    global clientPort
+    global result
+    global mutex
 
     # We activate the socket for listening
     clientSocket.listen()
@@ -194,9 +238,9 @@ def listenResult(nbNodes):
     partialResult = 0
     numberResultsReceived = 0
     while True:
-
         data = None
 
+        # We accept the connection from the client and receive its data
         try:
             workerSocket, address = clientSocket.accept()
         except Exception as e:
@@ -216,10 +260,14 @@ def listenResult(nbNodes):
             workerSocket.close()
             continue
 
+        # We unpickle the data received
         workerPort, data = pickle.loads(data)
 
+        # Data received must be composed of the length of the data the worker
+        # received and the result of the computation
         if len(data) == 2:
             num, mean = data
+            # We calculated the weighted mean with the other received results
             partialResult += mean * (num / len_dataset)
             mutex.acquire()
             msgInfo = "I received the result (" + str(data) + ") from data partition: " + str(workersJob[(address[0], workerPort)])
@@ -228,10 +276,12 @@ def listenResult(nbNodes):
             mutex.release()
             numberResultsReceived += 1
 
-            if(numberResultsReceived == nbNodes):
+
+            if(numberResultsReceived == nbNodes): # when we have received everything
                 result = round(partialResult, meanDecimals)
 
-                # We close both sockets letting connectServer socket to get out of the recv blocking call when all data is processed
+                # We close both sockets letting connectServer socket  get out
+                # of the recv blocking call when all data is processed
                 workerSocket.close()
                 clientSocket.close()
                 connectServer.shutdown(socket.SHUT_RDWR)
