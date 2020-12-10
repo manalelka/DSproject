@@ -117,13 +117,15 @@ def main():
                         workerPort = addrs[i][1]
 
                         jobNumber = jobsToGetDone.pop()
-                        sendDataToWorker(
-                            datasets[jobNumber], workerIp, workerPort)
 
                         # We add to workersJob what job is this worker going to do
                         mutex.acquire()
                         workersJob[(workerIp, workerPort)] = jobNumber
                         mutex.release()
+                        
+                        sendDataToWorker(
+                            datasets[jobNumber], workerIp, workerPort)
+
 
                 elif flag == DEAD_WORKERS:  # These workers are dead
                     for i in range(len(addrs)):
